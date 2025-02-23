@@ -1,0 +1,16 @@
+{"time":"2025-02-22T21:57:20.546411691-06:00","level":"INFO","msg":"using version","core version":"0.19.1"}
+{"time":"2025-02-22T21:57:20.546494263-06:00","level":"INFO","msg":"created symlink","path":"/home/weh4401/st/misho/wandb/run-20250222_215720-gp9hgstv/logs/debug-core.log"}
+{"time":"2025-02-22T21:57:20.677544963-06:00","level":"INFO","msg":"created new stream","id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:20.677715383-06:00","level":"INFO","msg":"handler: started","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:20.678235748-06:00","level":"INFO","msg":"stream: started","id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:20.678248311-06:00","level":"INFO","msg":"writer: Do: started","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:20.678288188-06:00","level":"INFO","msg":"sender: started","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:20.823627559-06:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-02-22T21:57:21.535707517-06:00","level":"INFO","msg":"stream: closing","id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:21.535778225-06:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-02-22T21:57:21.536424653-06:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-02-22T21:57:21.908798275-06:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-02-22T21:57:21.993588252-06:00","level":"INFO","msg":"handler: closed","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:21.993653738-06:00","level":"INFO","msg":"writer: Close: closed","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:21.993710104-06:00","level":"INFO","msg":"sender: closed","stream_id":"gp9hgstv"}
+{"time":"2025-02-22T21:57:21.993956926-06:00","level":"INFO","msg":"stream: closed","id":"gp9hgstv"}

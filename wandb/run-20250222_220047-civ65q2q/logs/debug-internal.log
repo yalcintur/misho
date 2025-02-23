@@ -1,0 +1,16 @@
+{"time":"2025-02-22T22:00:47.371578009-06:00","level":"INFO","msg":"using version","core version":"0.19.1"}
+{"time":"2025-02-22T22:00:47.371613617-06:00","level":"INFO","msg":"created symlink","path":"/home/weh4401/st/misho/wandb/run-20250222_220047-civ65q2q/logs/debug-core.log"}
+{"time":"2025-02-22T22:00:47.596314408-06:00","level":"INFO","msg":"created new stream","id":"civ65q2q"}
+{"time":"2025-02-22T22:00:47.596383045-06:00","level":"INFO","msg":"stream: started","id":"civ65q2q"}
+{"time":"2025-02-22T22:00:47.596431737-06:00","level":"INFO","msg":"handler: started","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:47.596432259-06:00","level":"INFO","msg":"writer: Do: started","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:47.59647053-06:00","level":"INFO","msg":"sender: started","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:47.770329201-06:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-02-22T22:00:48.19388749-06:00","level":"INFO","msg":"stream: closing","id":"civ65q2q"}
+{"time":"2025-02-22T22:00:48.193930343-06:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-02-22T22:00:48.195572494-06:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-02-22T22:00:48.651425308-06:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-02-22T22:00:48.7376474-06:00","level":"INFO","msg":"handler: closed","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:48.737735984-06:00","level":"INFO","msg":"sender: closed","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:48.73772583-06:00","level":"INFO","msg":"writer: Close: closed","stream_id":"civ65q2q"}
+{"time":"2025-02-22T22:00:48.738116328-06:00","level":"INFO","msg":"stream: closed","id":"civ65q2q"}

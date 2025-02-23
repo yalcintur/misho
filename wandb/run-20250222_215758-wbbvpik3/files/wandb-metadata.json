@@ -1,0 +1,87 @@
+{
+  "os":  "Linux-3.10.0-1160.108.1.el7.x86_64-x86_64-with-glibc2.10",
+  "python":  "CPython 3.8.5",
+  "startedAt":  "2025-02-23T03:57:58.301197Z",
+  "args":  [
+    "/home/weh4401/st/misho/experiments/v01/train.yaml"
+  ],
+  "program":  "run.py",
+  "codePath":  "run.py",
+  "git":  {
+    "remote":  "https://github.com/yalcintur/misho.git",
+    "commit":  "57adce061a891486488afbd849cfebb76057e10a"
+  },
+  "email":  "yalcinturpg@gmail.com",
+  "root":  "/home/weh4401/st/misho",
+  "host":  "fsmbagcilabgpu1.fsm.northwestern.edu",
+  "executable":  "/home/weh4401/medtranslation/3d-vae/3dvae-train/lama/bin/python",
+  "codePathLocal":  "run.py",
+  "cpu_count":  40,
+  "cpu_count_logical":  80,
+  "gpu":  "NVIDIA RTX A6000",
+  "gpu_count":  8,
+  "disk":  {
+    "/":  {
+      "total":  "933761597440",
+      "used":  "857784422400"
+    }
+  },
+  "memory":  {
+    "total":  "404159029248"
+  },
+  "cpu":  {
+    "count":  40,
+    "countLogical":  80
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA RTX A6000",
+      "memoryTotal":  "51527024640",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    }
+  ],
+  "cudaVersion":  "12.0"
+}

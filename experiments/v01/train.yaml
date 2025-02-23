@@ -1,6 +1,6 @@
 # Policy function finetuning
 train_arguments:
-  device: "mps"
+  device: "cuda:1"
   model_name: "HuggingFaceTB/SmolLM2-135M"
   save_model_name: "smol-lm-135m"
   output_dir: "./sft_output"
@@ -11,6 +11,7 @@ train_arguments:
   save_steps: 10
   evaluation_strategy: "steps"
   eval_steps: 10
+  max_seq_len: 1024
   use_mps_device: false
   hub_model_id: "smol-lm-135m"
-  dataset_file: "../../dataset/game24"
+  dataset_file: "/home/weh4401/st/misho/dataset/game24"

@@ -1,0 +1,15 @@
+artifact_uri: file:///home/weh4401/st/misho/mlruns/0/4c1721e5733a424d98cae5a8bcc21fe8/artifacts
+end_time: 1740283604227
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 4c1721e5733a424d98cae5a8bcc21fe8
+run_name: ./sft_output
+run_uuid: 4c1721e5733a424d98cae5a8bcc21fe8
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1740283602077
+status: 3
+tags: []
+user_id: weh4401
