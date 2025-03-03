@@ -6,13 +6,13 @@ from trl import setup_chat_format
 from vllm import LLM, SamplingParams
 
 
-def list_of_states_to_expand(states: list[tuple[str, str, int]], model_path:str, n_actions_to_generate = 20):
+def list_of_states_to_expand(states: list[tuple[str, str, int]], model_path:str, n_actions_to_generate = 20, temperature = 0.7):
     # Load and update the tokenizer (for chat formatting and custom EOS token)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     # If the chat template is already configured, no need to call setup_chat_format again.
     # You can, if needed, do: tokenizer = setup_chat_format(model=None, tokenizer=tokenizer)[1]
     sampling_params = SamplingParams(
-    temperature=0.7  
+    temperature=temperature  
    )
     custom_eos_token = "\n"
     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(custom_eos_token)
