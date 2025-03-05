@@ -29,6 +29,9 @@ def list_of_states_to_expand(states: list[tuple[str, str, int]], model_path:str,
         output_actions = set()
         query, partial_state, index = state
         trees_actions[index] = {}
+        #if partial_state is not empty_string, insert new line between query and partial_state#
+        if partial_state != "":
+            query += "\n"
         prompt = query + partial_state
         messages = [{"role": "user", "content": prompt}]
         formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False)
@@ -36,7 +39,12 @@ def list_of_states_to_expand(states: list[tuple[str, str, int]], model_path:str,
         for _ in range(n_actions_to_generate):  # Use a proper loop variable
             result = llm.generate([formatted_prompt], sampling_params=sampling_params)
             generated_text = result[0].outputs[0].text.strip()
-            output_actions.add(generated_text)
+            if generated_text.startswith("assistant\n"):
+                cleaned_text = generated_text[len("assistant\n"):]
+            else:
+                cleaned_text = generated_text
+
+            output_actions.add(cleaned_text)
         # Store the unique generated actions in a list
         trees_actions[index][prompt] = list(output_actions)
 
