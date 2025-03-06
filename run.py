@@ -2,7 +2,7 @@ import os
 import yaml
 import argparse
 from finetuning.finetune_policy import finetune_policy
-
+from finetuning.finetune_value import finetune_value
 def read_yaml(file_path):
     with open(file_path, 'r') as file:
         return yaml.safe_load(file)
@@ -15,5 +15,8 @@ if __name__ == "__main__":
     config = read_yaml(args.config)
     train_config = config['train_arguments']
     
-    finetune_policy(train_config)
+    if train_config["model_name"] == 'policy':
+        finetune_policy(train_config)
+    elif train_config["model_name"] == 'value':
+        finetune_value(train_config)
     

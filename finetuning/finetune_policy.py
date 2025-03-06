@@ -4,8 +4,6 @@ from datasets import load_from_disk
 from trl import SFTConfig, SFTTrainer, setup_chat_format
 
 def finetune_policy(train_config):
-    for i,k in train_config.items():
-        print(f"{i}: {k}")
     model_name = train_config["model_name"]
     save_model_name = train_config["save_model_name"]
     output_dir = train_config["output_dir"]
