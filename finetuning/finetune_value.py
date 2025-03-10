@@ -1,3 +1,4 @@
+from torch.nn import BCEWithLogitsLoss
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,7 +13,7 @@ from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import mean_squared_error
 from transformers import set_seed, get_cosine_schedule_with_warmup
-from models import ValueFunction  # Import the model defined in valuefunction.py
+from my_models.valuefunction import ValueFunction  # Import the model defined in valuefunction.py
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import setup_chat_format
 
@@ -221,7 +222,7 @@ def finetune_value(train_config):
             inputs = {k: v.to(train_config["device"]) for k, v in batch.items()}
             labels = inputs.pop("labels")
             outputs = model(**inputs)
-            loss = nn.MSELoss()(outputs, labels)
+            loss = BCEWithLogitsLoss()(outputs, labels)
             loss.backward()
             
             if (step + 1) % train_config["gradient_accumulation_steps"] == 0:
@@ -294,5 +295,6 @@ if __name__ == "__main__":
     
     # Set device (GPU if available)
     config["device"] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    finetune_value(config)
+    train_config = config["train_arguments"]
+
+    finetune_value(train_config)
