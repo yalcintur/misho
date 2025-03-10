@@ -15,8 +15,8 @@ if __name__ == "__main__":
     config = read_yaml(args.config)
     train_config = config['train_arguments']
     
-    if train_config["model_name"] == 'policy':
+    if train_config["model_function"] == 'policy':
         finetune_policy(train_config)
-    elif train_config["model_name"] == 'value':
+    elif train_config["model_function"] == 'value':
         finetune_value(train_config)
     

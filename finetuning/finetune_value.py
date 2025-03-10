@@ -1,160 +1,298 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import List, Tuple, Optional
-from models import ValueFunction
+from torch.utils.data import DataLoader, Dataset, random_split
+import os
+import json
+import yaml
+import sys
+import random
+import logging
+from tqdm import tqdm
+import numpy as np
+from sklearn.metrics import mean_squared_error
+from transformers import set_seed, get_cosine_schedule_with_warmup
+from models import ValueFunction  # Import the model defined in valuefunction.py
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import setup_chat_format
 
-def train_model(train_config, model, train_data, dev_data=None):
+# Configure logging
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+class ValueDataset(Dataset):
+    """
+    Custom dataset for value function training.
+    Each example is a tuple: (conversation, score)
+    """
+    def __init__(self, data, tokenizer, max_length=1024):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.data)
     
-    model_name = train_config["model_name"]
-    save_model_name = train_config["save_model_name"]
-    output_dir = train_config["output_dir"]
-    max_epochs = int(train_config["max_epochs"])
-    batch_size = int(train_config["per_device_train_batch_size"])
-    learning_rate = float(train_config["learning_rate"])
-    logging_steps = int(train_config["logging_steps"])
-    save_steps = int(train_config["save_steps"])
-    evaluation_strategy = train_config["evaluation_strategy"]
-    eval_steps = int(train_config["eval_steps"])
-    use_mps_device = train_config["use_mps_device"]
-    dataset_file = train_config["dataset_file"]
-    device = train_config["device"]
-    # Move model to device
-    model = model.to(device)
+    def __getitem__(self, idx):
+        conversation, score = self.data[idx]
+        return conversation, torch.tensor(score, dtype=torch.float32)
+
+    def collate_fn(self, batch):
+        conversations, scores = zip(*batch)
+        inputs = self.tokenizer.apply_chat_template(
+            conversations,
+            padding="max_length",
+            truncation=True,
+            max_length=256,
+            return_tensors="pt"
+        )
+        # If inputs is a dict, use its keys; otherwise, assume it's a tensor of input_ids.
+        if isinstance(inputs, dict):
+            input_ids = inputs["input_ids"]
+            attention_mask = inputs["attention_mask"]
+        else:
+            input_ids = inputs
+            attention_mask = torch.ones_like(input_ids)
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": torch.stack(scores)
+        }
+
+def convert_jsonl_to_train_data(jsonl_file_path: str):
+    """
+    Converts a JSONL file to a list of (conversation, score) tuples.
+    Expects each line to contain a JSON object with keys 'prompt' and 'completion'.
+    Only user messages are extracted for the conversation.
+    """
+    train_data = []
+    invalid_count = 0
     
-    # Create optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    with open(jsonl_file_path, 'r', encoding='utf-8') as f:
+        for line in tqdm(f, desc="Processing JSONL"):
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                data = json.loads(line)
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except json.JSONDecodeError:
+                        invalid_count += 1
+                        continue
+                
+                # Check for required keys
+                if not all(key in data for key in ("prompt", "completion")):
+                    invalid_count += 1
+                    continue
+                
+                # Extract only user messages
+                user_messages = [msg for msg in data["prompt"] if msg["role"] == "user"]
+                if not user_messages:
+                    invalid_count += 1
+                    continue
+                
+                # Extract score from the completion content
+                completion = data["completion"]
+                try:
+                    if isinstance(completion, list):
+                        content = completion[0].get("content", "")
+                    elif isinstance(completion, dict):
+                        content = completion.get("content", "")
+                    else:
+                        content = str(completion)
+                    score = float(content)
+                    # Optionally enforce score range (e.g., 0.0 to 1.0)
+                    if not (0.0 <= score <= 1.0):
+                        raise ValueError("Score out of expected range")
+                except (ValueError, KeyError, TypeError):
+                    invalid_count += 1
+                    continue
+                
+                train_data.append((user_messages, score))
+                
+            except json.JSONDecodeError:
+                invalid_count += 1
+                continue
     
-    # Loss function
-    criterion = nn.BCELoss(reduction='mean')
+    logger.warning(f"Skipped {invalid_count} invalid/malformed entries")
+    return train_data
+
+def split_data(data, ratios=(0.8, 0.1, 0.1)):
+    """
+    Splits data into train, validation, and test sets based on provided ratios.
+    The ratios should sum to 1.0.
+    """
+    assert sum(ratios) == 1.0, "Split ratios must sum to 1.0"
+    total = len(data)
+    train_size = int(ratios[0] * total)
+    val_size = int(ratios[1] * total)
+    test_size = total - train_size - val_size
+    return random_split(data, [train_size, val_size, test_size])
+
+def evaluate_model(model, dataloader, device):
+    """
+    Evaluates the model on a given dataloader and returns the RMSE.
+    """
+    model.eval()
+    predictions, true_scores = [], []
     
-    # Adjust batch size if dataset is smaller than the batch size
-    actual_batch_size = min(batch_size, len(train_data))
-    if actual_batch_size < batch_size:
-        print(f"Warning: Dataset size ({len(train_data)}) is smaller than requested batch size ({batch_size}). Using batch size of {actual_batch_size} instead.")
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Evaluating"):
+            inputs = {k: v.to(device) for k, v in batch.items()}
+            labels = inputs.pop("labels")
+            outputs = model(**inputs)
+            predictions.extend(outputs.cpu().numpy())
+            true_scores.extend(labels.cpu().numpy())
     
-    # Training loop
-    for epoch in range(epochs):
+    rmse = np.sqrt(mean_squared_error(true_scores, predictions))
+    return rmse
+
+def finetune_value(train_config):
+    """
+    Fine-tunes the value function model using the provided configuration.
+    """
+    # Set seeds for reproducibility
+    set_seed(train_config["seed"])
+    random.seed(train_config["seed"])
+    np.random.seed(train_config["seed"])
+    
+    # Load and preprocess data
+    all_data = convert_jsonl_to_train_data(train_config["dataset_file"])
+    train_split, val_split, test_split = split_data(all_data, tuple(train_config["split_ratios"]))
+    
+    # Initialize the model and tokenizer
+    model = ValueFunction(train_config["model_name"]).to(train_config["device"])
+    tokenizer = model.tokenizer
+    
+    model, tokenizer = setup_chat_format(model=model, tokenizer=tokenizer)
+
+    # Create dataset objects and data loaders
+    train_dataset = ValueDataset(train_split, tokenizer)
+    val_dataset = ValueDataset(val_split, tokenizer)
+    
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=train_config["batch_size"],
+        shuffle=True,
+        collate_fn=train_dataset.collate_fn
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=train_config["batch_size"],
+        collate_fn=val_dataset.collate_fn
+    )
+    
+    base_lr = float(train_config["base_lr"])
+    head_lr = float(train_config["head_lr"])
+    weight_decay = float(train_config["weight_decay"])
+
+    optimizer = optim.AdamW([
+        {'params': model.base_model.parameters(), 'lr': base_lr},
+        {'params': model.value_head.parameters(), 'lr': head_lr}
+    ], weight_decay=weight_decay)
+
+    total_steps = len(train_loader) * train_config["max_epochs"]
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=train_config["warmup_steps"],
+        num_training_steps=total_steps
+    )
+    
+    global_step = 0
+    best_rmse = float('inf')
+    patience_counter = 0
+    best_folder = None
+
+    for epoch in range(train_config["max_epochs"]):
         model.train()
         epoch_loss = 0.0
-        batch_count = 0
+        optimizer.zero_grad()
         
-        # Process in batches
-        for i in range(0, len(train_data), actual_batch_size):
-            batch = train_data[i:i+actual_batch_size]
-            conversations = [item[0] for item in batch]
-            targets = torch.tensor([item[1] for item in batch], dtype=torch.float32).to(device)
-            
-            # Prepare batch inputs
-            batch_inputs = []
-            for conv in conversations:
-                batch_inputs.append(conv)
-            
-            # Convert to model inputs
-            inputs = model.prepare_input(batch_inputs)
-            inputs = {k: v.to(device) for k, v in inputs.items()}
-            
-            # Forward pass
+        progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}")
+        for step, batch in progress_bar:
+            global_step += 1
+            inputs = {k: v.to(train_config["device"]) for k, v in batch.items()}
+            labels = inputs.pop("labels")
             outputs = model(**inputs)
-            
-            # Ensure compatible dimensions for loss calculation
-            # Use view to preserve batch dimension even for single samples
-            outputs_reshaped = outputs.view(-1)
-            
-            # Calculate loss with shape-compatible tensors
-            loss = criterion(outputs_reshaped, targets)
-            
-            # Backward and optimize
-            optimizer.zero_grad()
+            loss = nn.MSELoss()(outputs, labels)
             loss.backward()
-            optimizer.step()
+            
+            if (step + 1) % train_config["gradient_accumulation_steps"] == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), train_config["max_grad_norm"])
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
             
             epoch_loss += loss.item()
-            batch_count += 1
+            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+            
+            # Run validation every 200 batches
+            if global_step % 200 == 0:
+                model.eval()
+                val_rmse = evaluate_model(model, val_loader, train_config["device"])
+                logger.info(f"Global step {global_step} - Validation RMSE: {val_rmse:.4f}")
+                
+                # Print results for 20 examples from the validation set
+                logger.info("Example predictions from validation set:")
+                # Loop over the first 20 examples
+                for i in range(min(20, len(val_dataset))):
+                    conversation, true_score = val_dataset[i]
+                    # Using the model's predict method (ensure evaluation mode)
+                    with torch.no_grad():
+                        prediction = model.predict(conversation)
+                    logger.info(f"Example {i+1}: True Score: {true_score.item():.4f}, Predicted Score: {prediction.item():.4f}")
+                    logger.info(f"Conversation: {conversation}")
+                
+                if val_rmse < best_rmse:
+                    best_rmse = val_rmse
+                    patience_counter = 0
+                    best_folder = os.path.join(train_config["output_dir"], f"batch_{global_step}")
+                    os.makedirs(best_folder, exist_ok=True)
+                    # Save the full model (not just state_dict)
+                    torch.save(model, os.path.join(best_folder, "full_model.pt"))
+                    tokenizer.save_pretrained(best_folder)
+                    logger.info(f"Saved full model at global step {global_step}")
+                else:
+                    patience_counter += 1
+                    if patience_counter >= train_config["patience"]:
+                        logger.info("Early stopping triggered")
+                        break
+                model.train()
         
-        # Print epoch results
-        avg_loss = epoch_loss / batch_count if batch_count > 0 else 0
-        print(f"Epoch {epoch+1}/{max_epochs}, Loss: {avg_loss:.4f}")
+        avg_train_loss = epoch_loss / len(train_loader)
+        logger.info(f"Epoch {epoch+1} - Average Training Loss: {avg_train_loss:.4f}")
         
-        # Evaluate on dev set if provided
-        if dev_data:
-            model.eval()
-            with torch.no_grad():
-                val_loss = 0.0
-                correct = 0
-                val_batch_count = 0
-                
-                # Adjust validation batch size if needed
-                actual_val_batch_size = min(batch_size, len(dev_data))
-                
-                for i in range(0, len(dev_data), actual_val_batch_size):
-                    batch = dev_data[i:i+actual_val_batch_size]
-                    conversations = [item[0] for item in batch]
-                    targets = torch.tensor([item[1] for item in batch], dtype=torch.float32).to(device)
-                    
-                    # Prepare batch
-                    batch_inputs = []
-                    for conv in conversations:
-                        batch_inputs.append(conv)
-                    
-                    # Convert to model inputs
-                    inputs = model.prepare_input(batch_inputs)
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
-                    
-                    # Forward pass
-                    outputs = model(**inputs)
-                    
-                    # Ensure compatible dimensions for validation
-                    outputs_reshaped = outputs.view(-1)
-                    val_loss += criterion(outputs_reshaped, targets).item()
-                    
-                    # Calculate accuracy with shape-compatible predictions
-                    predictions = (outputs_reshaped > 0.5).float()
-                    correct += (predictions == targets).sum().item()
-                    val_batch_count += 1
-                
-                # Calculate validation metrics
-                avg_val_loss = val_loss / val_batch_count if val_batch_count > 0 else 0
-                accuracy = correct / len(dev_data) if len(dev_data) > 0 else 0
-                print(f"Validation - Loss: {avg_val_loss:.4f}, Accuracy: {accuracy:.4f}")
-    
-    return model
+        if patience_counter >= train_config["patience"]:
+            break
 
-# Example usage
-def example_usage():
-    # Create model
-    model = ValueFunction("HuggingFaceTB/SmolLM2-135M")
+    # Final evaluation on test set
+    logger.info("Starting final evaluation on test set...")
+    if best_folder is not None:
+        # Load the best full model
+        model = torch.load(os.path.join(best_folder, "full_model.pt"))
+    test_dataset = ValueDataset(test_split, tokenizer)
+    test_loader = DataLoader(test_dataset, batch_size=train_config["batch_size"], collate_fn=test_dataset.collate_fn)
+    test_rmse = evaluate_model(model, test_loader, train_config["device"])
+    logger.info(f"Final Test RMSE: {test_rmse:.4f}")
     
-    # Example training data (format: conversation, label)
-    train_data = [
-        (
-            [
-                {"role": "user", "content": "3 3 5 12"},
-                {"role": "assistant", "content": "5 - 12 = -7 (left: -7 3 3)."}
-            ], 
-            1.0  # Correct solution
-        ),
-        (
-            [
-                {"role": "user", "content": "3 3 5 12"},
-                {"role": "assistant", "content": "5 - 12 = -5 (left: -7 3 2)."}
-            ], 
-            1.0  # Incorrect solution
-        ),
-        # Add more examples as needed
-    ]
-    
-    # Train model
-    trained_model = train_model(model, train_data, epochs=50)
-    
-    # Example prediction
-    test_conversation = [
-        {"role": "user", "content": "4 7 8 9"},
-        {"role": "assistant", "content": "8 + 4 = 12 (left: 12 7 9)\n12 * 7 = 84 (left: 84 9)\n84 / 9 = 24\nThe answer is (8 + 4) * 7 / 9 = 24."}
-    ]
-    
-    prediction = trained_model.predict(test_conversation)
-    print(f"Value prediction: {prediction.item():.4f}")
+    return model, test_split
 
 if __name__ == "__main__":
-    example_usage()
+    if len(sys.argv) != 2:
+        print("Usage: python finetune_value.py <config_file>")
+        sys.exit(1)
+    
+    with open(sys.argv[1], 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Set device (GPU if available)
+    config["device"] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    finetune_value(config)

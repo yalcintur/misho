@@ -2,16 +2,19 @@
 train_arguments:
   device: "cuda"
   model_function: "value"
-  model_name: "HuggingFaceTB/SmolLM2-135M-Instruct"
-  save_model_name: "smol-lm-135M-instruct"
-  output_dir: "/data/yalcin/sft_output_135-instruct"
+  model_name: "HuggingFaceTB/SmolLM2-135M"
+  save_model_name: "smol-lm-135M"
+  output_dir: "/data/yalcin/value/sft_output_135M"
   max_epochs: 3
-  batch_size: 8
-  learning_rate: 6e-6
+  batch_size: 32
+  learning_rate: 2e-5
+  warmup_steps: 100
+  max_grad_norm: 1.0
+  weight_decay: 0.01
   logging_steps: 5
-  save_batch_size: 1000
+  save_batch_size: 100
   evaluation_strategy: "steps"
-  eval_epochs: 1
+  eval_steps: 100
   use_mps_device: false
-  hub_model_id: "smol-lm-135M-instruct"
-  dataset_file: "/home/weh4401/st/misho/dataset/game24"
+  hub_model_id: "smol-lm-135M"
+  dataset_file: "/home/weh4401/st/24/misho/value_training_data.jsonl"
