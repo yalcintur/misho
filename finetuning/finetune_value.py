@@ -1,3 +1,4 @@
+import torch.nn.functional as F
 from torch.nn import BCEWithLogitsLoss
 import torch
 import torch.nn as nn
@@ -13,7 +14,7 @@ from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import mean_squared_error
 from transformers import set_seed, get_cosine_schedule_with_warmup
-from my_models.valuefunction import ValueFunction  # Import the model defined in valuefunction.py
+from models.valuefunction import ValueFunction  # Import the model defined in valuefunction.py
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import setup_chat_format
 
@@ -142,18 +143,22 @@ def evaluate_model(model, dataloader, device):
     Evaluates the model on a given dataloader and returns the RMSE.
     """
     model.eval()
-    predictions, true_scores = [], []
-    
+    total_loss = 0.0
+    total_samples = 0
+
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Evaluating"):
-            inputs = {k: v.to(device) for k, v in batch.items()}
-            labels = inputs.pop("labels")
-            outputs = model(**inputs)
-            predictions.extend(outputs.cpu().numpy())
-            true_scores.extend(labels.cpu().numpy())
-    
-    rmse = np.sqrt(mean_squared_error(true_scores, predictions))
-    return rmse
+       for batch in tqdm(dataloader, desc="Evaluating"):
+          inputs = {k: v.to(device) for k, v in batch.items()}
+          labels = inputs.pop("labels")
+          logits = model(**inputs)
+          probs = torch.sigmoid(logits)
+          loss = F.binary_cross_entropy(probs, labels, reduction='sum')
+          total_loss += loss.item()
+          total_samples += labels.numel()
+
+    avg_bce_loss = total_loss / total_samples
+    return avg_bce_loss
+
 
 def finetune_value(train_config):
     """
@@ -234,8 +239,8 @@ def finetune_value(train_config):
             epoch_loss += loss.item()
             progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
             
-            # Run validation every 200 batches
-            if global_step % 200 == 0:
+            # Run validation every half epoch
+            if global_step % 1200 == 0:
                 model.eval()
                 val_rmse = evaluate_model(model, val_loader, train_config["device"])
                 logger.info(f"Global step {global_step} - Validation RMSE: {val_rmse:.4f}")
