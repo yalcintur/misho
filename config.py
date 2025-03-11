@@ -6,24 +6,26 @@ Configuration for MCTS training.
 DEFAULT_CONFIG = {
     # Forest configuration
     'forest': {
-        'num_trees': 100,
+        'num_trees': 140,
         'max_expansions': 40,
-        'max_leaves': 100,
+        'max_leaves': 80,
         'c_explore': 0.3,
         'temperature': 0.8,
         'branch_factor': 5,
-        'batch_size': 50,
-        'batch_interval': 0.1
+        'batch_size': 70,
+        'batch_interval': 1.0,
+        'max_workers_policy': 70,
+        'max_workers_value': 30
     },
     
     # Training configuration
     'training': {
-        'target_examples_per_question': 100
+        'target_examples_per_question': 140
     },
     
     # File paths configuration
     'paths': {
-        'checkpoint_path': 'forest_checkpoint.pkl',
+        'questions_path': 'all_questions.txt',
         'policy_data_path': 'policy_training_data.jsonl',
         'value_data_path': 'value_training_data.jsonl',
         'stats_path': 'training_stats.json'
@@ -31,9 +33,16 @@ DEFAULT_CONFIG = {
     
     # Intervals configuration
     'intervals': {
-        'save_interval': 300,  # 5 minutes
-        'export_interval': 60,  # 1 minute
-        'stats_interval': 30    # 30 seconds
+        'export_interval': 120,  # 2 minutes
+        'stats_interval': 60    # 1 minute
+    },
+    
+    # API configuration
+    'api': {
+        'openai_api_base': "http://185.185.58.72:40095/v1",
+        'openai_api_key': "sk-placeholder",
+        'value_api_base_url': None,  # Replace with actual URL when ready
+        'value_api_endpoint': "/api/value"
     }
 }
 

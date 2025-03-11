@@ -1,160 +1,168 @@
 import concurrent.futures
 from openai import OpenAI
-import time
-# Set up your client
-openai_api_key = ""
-openai_api_base = "http://109.198.107.223:51643/v1"
+import requests
+from typing import List, Tuple, Any
+from urllib.parse import urljoin
 
-client = OpenAI(
-    base_url=openai_api_base,
-    api_key="sk-placeholder",  # Use a placeholder that looks like a key
-)
 
-def policy_fn(question, state, temperature, branch_factor):
-    """
-    Generate text completions based on query and state using the OpenAI API.
+class PolicyValueModel:
+    """Handles policy (state generation) and value estimation for RL-based math problem solving."""
     
-    Args:
-        question (str): The initial question text
-        state (str): The current state of the conversation
-        temperature (float): Controls randomness in generation
-        branch_factor (int): Number of completions to generate
+    def __init__(
+        self, 
+        openai_api_base: str,
+        openai_api_key: str = "sk-placeholder",
+        value_api_base_url: str = None,
+        value_api_endpoint: str = "/api/value",
+        policy_model: str = "mstojkov/sft-135-checkpoint-3000-improved_policy",
+        temperature: float = 0.7,
+        branch_factor: int = 40,
+        max_workers_policy: int = 80,
+        max_workers_value: int = 30
+    ):
+        """Initialize policy and value networks with API settings."""
+        # Policy network (LLM) setup
+        self.policy_network = OpenAI(base_url=openai_api_base, api_key=openai_api_key)
+        self.policy_model = policy_model
         
-    Returns:
-        list: Unique generated text completions
-    """
-    try:
-        # Construct the prompt from question and state
-        if state != "":
-            question = question + "\n"
-        prompt = question + state
+        # Value network setup
+        self.value_network_url = urljoin(value_api_base_url, value_api_endpoint) if value_api_base_url else None
+        
+        # Sampling parameters
+        self.temperature = temperature
+        self.n_actions = branch_factor
+        self.max_workers_policy = max_workers_policy
+        self.max_workers_value = max_workers_value
 
-        # Attempt to generate completions via API
+    def sample_policy(self, question: str, state: str, temperature: float, n_samples: int) -> List[str]:
+        """Sample next states from policy network (LLM)."""
         try:
-            response = client.chat.completions.create(
-                model="mstojkov/sft-135-checkpoint-3000-improved_policy",
+            response = self._query_policy_network(question, state, temperature, n_samples)
+            if not response:
+                return []
+            
+            # Add newline for non-terminal states
+            suffix = "" if len(state.split("\n")) >= 4 else "\n"
+            
+            return list(set(
+                (state + action.message.content.strip() + suffix)
+                for action in response.choices 
+                if hasattr(action, 'message')
+            ))
+            
+        except Exception as e:
+            print(f"Policy sampling error: {str(e)}")
+            return []
+
+    def estimate_value(self, question: str, state: str) -> float:
+        """Estimate state value using value network."""
+        if not self.value_network_url:
+            return 0.5
+            
+        try:
+            response = requests.post(
+                url=self.value_network_url,
+                json={"question": question, "state": state},
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+            
+            return float(response.json().get("value", 0.5)) if response.status_code == 200 else 0.5
+                
+        except Exception as e:
+            print(f"Value estimation error: {type(e).__name__}: {str(e)}")
+            return 0.5
+
+    def parallel_process(self, fn, items: List[Tuple], max_workers: int) -> List[Any]:
+        """Process items in parallel using thread pool."""
+        if not items:
+            return []
+            
+        results = [None] * len(items)
+        workers = min(max_workers, len(items))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(fn, *item): i for i, item in enumerate(items)}
+            
+            for future in concurrent.futures.as_completed(futures):
+                idx = futures[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as e:
+                    print(f"Error at index {idx}: {e}")
+                    results[idx] = fn.__defaults__[0] if fn.__defaults__ else None
+        
+        return results
+
+    def batch_value_estimate(self, questions_and_states: List[Tuple[str, str]]) -> List[float]:
+        """Batch estimate values for multiple states."""
+        return [] if not questions_and_states else self.parallel_process(
+            self.estimate_value, questions_and_states, self.max_workers_value
+        )
+
+    def get_policy_value(self, questions_and_states: List[Tuple[str, str]]) -> List[List[Tuple[str, float]]]:
+        """Sample actions from policy and estimate their values."""
+        if not questions_and_states:
+            return []
+        
+        # Sample actions from policy
+        policy_inputs = [(q, s, self.temperature, self.n_actions) for q, s in questions_and_states]
+        next_states = self.parallel_process(self.sample_policy, policy_inputs, self.max_workers_policy)
+    
+        # Prepare value estimation inputs
+        value_inputs, positions = [], []
+        questions = [q for q, _ in questions_and_states]
+        
+        for i, (question, states) in enumerate(zip(questions, next_states)):
+            for j, state in enumerate(states):
+                value_inputs.append((question, state))
+                positions.append((i, j))
+        
+        # Get value estimates
+        values = self.parallel_process(self.estimate_value, value_inputs, self.max_workers_value)
+        
+        # Combine results
+        result = [[] for _ in range(len(questions_and_states))]
+        for (i, j), value in zip(positions, values):
+            result[i].append((next_states[i][j], value))
+        
+        return result
+
+    def _query_policy_network(self, question: str, state: str, temperature: float, n_samples: int):
+        """Query the policy network (LLM) for next actions."""
+        try:
+            # Send both question and state as context, but only get back the next action
+            prompt = f"{question}\n{state}"
+            return self.policy_network.chat.completions.create(
+                model=self.policy_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
-                n=branch_factor,
+                n=n_samples,
                 max_completion_tokens=90,
-                stop=[".", "\n"]
+                stop=["\n"]
             )
         except Exception as e:
-            print("Connection error.")
-            print(e)
-            return []  # Return empty list immediately if the API call fails
-
-        # Process and format the generated completions
-        generated_texts = []
-        # Define some defaults:
-        result_append_text = " The answer is "  # Example text to append
-        state_list = state.split("\n")
-        is_final_state = (len(state_list) == 4)
-        
-        for choice in response.choices:
-            if not hasattr(choice, 'message') or not hasattr(choice.message, 'content'):
-                continue  # Skip invalid responses
-            text = choice.message.content.strip()
-            
-            # Format the final text: Only include the generated text, not the prompt
-            formatted_text = text
-            
-            # Add appropriate ending punctuation
-            if is_final_state:
-                formatted_text += "."
-            elif len(state_list) < 4:
-                formatted_text += "\n"
-                
-            generated_texts.append(formatted_text)
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_texts = [txt for txt in generated_texts if not (txt in seen or seen.add(txt))]
-        return unique_texts
-        
-    except Exception as e:
-        print(f"Error in policy_fn: {str(e)}")
-        return []  # Return empty list on error
-
-def policy_fn_batch(q_and_states, temperature, branch_factor, max_workers=5):
-    """
-    Process a batch of (question, state) pairs concurrently, preserving input order.
-    
-    Args:
-        q_and_states (list of tuples): Each tuple is (question, state).
-        temperature (float): Temperature parameter for generation.
-        branch_factor (int): Number of completions per request.
-        max_workers (int): Number of parallel threads.
-    
-    Returns:
-        list of lists: Each inner list contains the unique generated text completions for one input.
-    """
-    # Prepare a list to store results in the same order as q_and_states.
-    results = [None] * len(q_and_states)
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Map each submitted task to its index.
-        future_to_index = {
-            executor.submit(policy_fn, q, s, temperature, branch_factor): i 
-            for i, (q, s) in enumerate(q_and_states)
-        }
-        
-        # Process tasks as they complete.
-        for future in concurrent.futures.as_completed(future_to_index):
-            idx = future_to_index[future]
-            try:
-                results[idx] = future.result()
-            except Exception as e:
-                print(f"Error processing input at index {idx}: {e}")
-                results[idx] = []
-    
-    # Return the list of lists directly, with each inner list containing unique responses for one input
-    return results
-
-def policy_value_fn(q_and_states, temperature, branch_factor, max_workers=50):
-    """
-    Process a batch of (question, state) pairs and return a list of lists of actions.
-    Each action is prefixed with its corresponding state.
-    
-    Args:
-        q_and_states (list of tuples): Each tuple is (question, state).
-        temperature (float): Temperature parameter for generation.
-        branch_factor (int): Number of completions per request.
-        max_workers (int): Number of parallel threads.
-    
-    Returns:
-        list of lists: Each inner list contains the unique actions for one input,
-                      with each action prefixed by its state.
-    """
-    # Get the raw responses using the policy_fn_batch
-    results = policy_fn_batch(q_and_states, temperature, branch_factor, max_workers)
-    
-    # Process each response to append the state in front of each result
-    processed_results = []
-    for i, input_responses in enumerate(results):
-        actions = []
-        _, state = q_and_states[i]  # Get the state for this input
-        
-        for response in input_responses:
-            # Append the state in front of the response
-            if state:
-                prefixed_response = state + response
-            else:
-                prefixed_response = response
-                
-            actions.append((prefixed_response,0.5))
-            
-        processed_results.append(actions)
-    
-    return processed_results
+            print(f"Policy network error: {e}")
+            return None
 
 
-#question = "3 7 11 12"
-#state = ""
-
-
-#a = policy_value_fn([(question, state)], temperature=1.0, branch_factor=40)
-#for i in a:
-#    for idx, item in enumerate(i):
-#        print(f"{idx+1}: {item[0]}: {item[1]}")
-    print("---")
+if __name__ == "__main__":
+    model = PolicyValueModel(
+        openai_api_base="http://185.185.58.72:40095/v1",
+        value_api_base_url=None
+    )
+    
+    # Test trajectory
+    question = "3 7 11 12"
+    states = [
+        "",  # Initial state
+        "11-12=-1 (left: 3, 7, -1)\n",  # Action 1
+        "11-12=-1 (left: 3, 7, -1)\n3*7=21 (left: -1, 21)\n",  # Action 2
+        "11-12=-1 (left: 3, 7, -1)\n3*7=21 (left: -1, 21)\n21--1=22 (left: 22)\n"  # Action 3
+    ]
+    
+    # Get policy samples and their values
+    results = model.get_policy_value([(question, states[3])])
+    for result_list in results:
+        for next_state, value in result_list:
+            print(f"{next_state}{value}")
