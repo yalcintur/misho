@@ -6,7 +6,7 @@ Configuration for MCTS training.
 DEFAULT_CONFIG = {
     # Forest configuration
     'forest': {
-        'num_trees': 140,
+        'num_trees': 100,
         'max_expansions': 40,
         'max_leaves': 80,
         'c_explore': 0.3,
@@ -14,8 +14,8 @@ DEFAULT_CONFIG = {
         'branch_factor': 5,
         'batch_size': 70,
         'batch_interval': 1.0,
-        'max_workers_policy': 70,
-        'max_workers_value': 30
+        'max_workers_policy': 10,
+        'max_workers_value': 10
     },
     
     # Training configuration
@@ -41,8 +41,8 @@ DEFAULT_CONFIG = {
     'api': {
         'openai_api_base': "http://185.185.58.72:40095/v1",
         'openai_api_key': "sk-placeholder",
-        'value_api_base_url': None,  # Replace with actual URL when ready
-        'value_api_endpoint': "/api/value"
+        'value_api_base_url': "http://185.113.120.195:50005/predict",  # Replace with actual URL when ready
+        'value_api_endpoint': None
     }
 }
 

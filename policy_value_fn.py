@@ -13,7 +13,7 @@ class PolicyValueModel:
         openai_api_base: str,
         openai_api_key: str = "sk-placeholder",
         value_api_base_url: str = None,
-        value_api_endpoint: str = "/api/value",
+        value_api_endpoint = None,
         policy_model: str = "mstojkov/sft-135-checkpoint-3000-improved_policy",
         temperature: float = 0.7,
         branch_factor: int = 40,
@@ -26,8 +26,7 @@ class PolicyValueModel:
         self.policy_model = policy_model
         
         # Value network setup
-        self.value_network_url = urljoin(value_api_base_url, value_api_endpoint) if value_api_base_url else None
-        
+        self.value_network_url = value_api_base_url
         # Sampling parameters
         self.temperature = temperature
         self.n_actions = branch_factor
@@ -56,22 +55,38 @@ class PolicyValueModel:
 
     def estimate_value(self, question: str, state: str) -> float:
         """Estimate state value using value network."""
-        if not self.value_network_url:
-            return 0.5
-            
+        
         try:
+        # If your value endpoint expects a "messages" key rather than "question/state",
+        # build the payload accordingly:
+            if state != "":
+                question += "\n"
+                
+            prompt = question + "\n" + state
+
+            payload = {
+                "messages": [
+                    {"role": "user", "content": prompt},
+                ],
+            }
+        
             response = requests.post(
                 url=self.value_network_url,
-                json={"question": question, "state": state},
+                json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=10
+                timeout=30
             )
             
-            return float(response.json().get("value", 0.5)) if response.status_code == 200 else 0.5
+            if response.status_code == 200:
+                # Convert the "value" key from the response to float
+                return float(response.json().get("value", 0.5))
+            else:
+                return 0.5
                 
         except Exception as e:
             print(f"Value estimation error: {type(e).__name__}: {str(e)}")
             return 0.5
+
 
     def parallel_process(self, fn, items: List[Tuple], max_workers: int) -> List[Any]:
         """Process items in parallel using thread pool."""
@@ -149,7 +164,7 @@ class PolicyValueModel:
 if __name__ == "__main__":
     model = PolicyValueModel(
         openai_api_base="http://185.185.58.72:40095/v1",
-        value_api_base_url=None
+        value_api_base_url="http://185.113.120.195:50005/predict"
     )
     
     # Test trajectory

@@ -7,8 +7,12 @@ class TrajectoryProcessor:
     @staticmethod
     def _create_prompt(question: str, state: List[str] = None) -> List[dict]:
         """Create prompt with question and current state (sequence of actions)."""
-        return [{"role": "user", "content": f"{question.rstrip()}\n{(''.join(a.strip() + '\n' for a in state) if state else '')}"}]
-    
+        if state:
+            joined = ''.join(a.strip() + "\n" for a in state)
+        else:
+            joined = ''
+        return [{"role": "user", "content": f"{question.rstrip()}\n{joined}"}]
+
     @staticmethod
     def _format_data(prompt: List[dict], completion: str) -> str:
         """Format as JSON string for model training."""
