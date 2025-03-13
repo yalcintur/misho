@@ -35,9 +35,9 @@ def prepare_dataset(train_file, val_file, output_dir, test_file=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare a Hugging Face dataset from JSONL files")
     
-    parser.add_argument("--train_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_training_data_iter_1-f.jsonl", help="Path to the training JSONL file")
-    parser.add_argument("--val_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_validation_data_iter_1-f.jsonl", help="Path to the test JSONL file (optional)")
-    parser.add_argument("--output_dir", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_ds", help="Directory to save the processed dataset")
+    parser.add_argument("--train_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter2_135_ds/policy_training_data_iter_2-f.jsonl", help="Path to the training JSONL file")
+    parser.add_argument("--val_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter2_135_ds/policy_validation_data_iter_2-f.jsonl", help="Path to the test JSONL file (optional)")
+    parser.add_argument("--output_dir", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter2_135_ds/policy_ds", help="Directory to save the processed dataset")
 
     args = parser.parse_args()
 
