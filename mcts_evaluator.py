@@ -67,12 +67,13 @@ class MCTSNode:
 class MCTSTree:
     """Single MCTS tree for exploring solutions to a question."""
     
-    def __init__(self, root_value: float, question: str, exploration_constant: float, request_queue):
+    def __init__(self, root_value: float, question: str, exploration_constant: float, request_queue, tree_id: int):
         self.root = MCTSNode(state="", parent=None, visit_count=0, 
                             action_value=0, value_estimate=root_value)
         self.question = question
         self.exploration_constant = exploration_constant
         self.request_queue = request_queue
+        self.tree_id = tree_id
         self.expansion_count = 0
         self.non_terminal_leaves = [self.root]
         self.terminal_leaves = []
@@ -81,7 +82,7 @@ class MCTSTree:
     async def get_action_values(self, node: MCTSNode) -> list[tuple[str, float]]:
         """Get action-value pairs from policy-value network."""
         future = asyncio.Future()
-        await self.request_queue.put((self.question, node.state, future))
+        await self.request_queue.put((self.question, node.state, self.tree_id, future))
         try:
             return await asyncio.wait_for(future, timeout=60)
         except asyncio.TimeoutError:
@@ -191,14 +192,14 @@ class MCTSForest:
         empty_configs = [(q, e, b, t) for (q, e, b, t), results 
                         in self.results.items() if not results]
         trees = []
-        for config in empty_configs[:self.num_trees]:
-            tree = self._create_tree(config)
+        for idx, config in enumerate(empty_configs[:self.num_trees]):
+            tree = self._create_tree(config, idx)
             if tree:
-                self.tree_configs[id(tree)] = config
+                self.tree_configs[idx] = config
                 trees.append(tree)
         return trees
 
-    def _create_tree(self, config: tuple) -> MCTSTree:
+    def _create_tree(self, config: tuple, tree_idx: int) -> MCTSTree:
         """Create tree with configuration-specific policy function."""
         question, exp_const, _, _ = config
         question_idx = self.questions.index(question)
@@ -206,36 +207,24 @@ class MCTSForest:
             root_value=self.initial_values[question_idx],
             question=question,
             exploration_constant=exp_const,
-            request_queue=self.request_queue
+            request_queue=self.request_queue,
+            tree_id=tree_idx
         )
 
     async def _process_network_requests(self, batch: list, futures: list):
-        """Process batch through policy-value network with tree-specific configurations."""
+        """Process batch of requests through policy-value network."""
         try:
-            # Group requests by tree configuration
-            tree_batches = {}
-            tree_futures = {}
-            for (question, state), future in zip(batch, futures):
-                tree = next(tree for tree in self.trees if tree.question == question)
-                tree_id = id(tree)
-                if tree_id not in tree_batches:
-                    tree_batches[tree_id] = []
-                    tree_futures[tree_id] = []
-                tree_batches[tree_id].append((question, state))
-                tree_futures[tree_id].append(future)
+            # Get predictions from policy-value network
+            results = self.policy_value_fn(batch)
             
-            # Process each configuration separately
-            for tree_id, sub_batch in tree_batches.items():
-                _, _, branch_factor, temp = self.tree_configs[tree_id]
-                results = self.policy_value_fn(sub_batch, branch_factor, temp)
-                for future, result in zip(tree_futures[tree_id], results):
-                    if not future.done():
-                        future.set_result(result)
-                        
-        except Exception as e:
-            for future in futures:
+            # Distribute results to waiting futures
+            for future, result in zip(futures, results):
                 if not future.done():
-                    future.set_exception(e)
+                    future.set_result(result)
+                    
+        except Exception as e:
+            print(f"Network request error: {e}")
+            self._handle_batch_error(futures, e)
 
     async def _batch_processor(self):
         """Process policy-value network requests in batches."""
@@ -244,8 +233,11 @@ class MCTSForest:
             try:
                 request = await asyncio.wait_for(
                     self.request_queue.get(), timeout=self.batch_interval)
-                batch.append((request[0], request[1]))
-                futures.append(request[2])
+                # Unpack the request tuple: (question, state, tree_id, future)
+                question, state, tree_id, future = request
+                # Create policy batch format directly: (question, state, branch_factor, temperature)
+                batch.append((question, state, *self.tree_configs[tree_id][2:]))
+                futures.append(future)
                 
                 if len(batch) >= self.batch_size or (batch and self.request_queue.empty()):
                     self.total_api_calls += len(batch)
@@ -277,7 +269,7 @@ class MCTSForest:
                 if not empty_configs:
                     break
                 
-                self.trees[spot_index] = self._create_tree(empty_configs[0])
+                self.trees[spot_index] = self._create_tree(empty_configs[0], None)
                 
             except Exception as e:
                 print(f"Spot {spot_index} error: {type(e).__name__}: {str(e)}")

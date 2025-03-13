@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from mcts_search import MCTSForest
 from policy_value_fn import PolicyValueModel
@@ -33,16 +33,14 @@ class MCTSDataCollector:
 
     def _initialize_model(self) -> PolicyValueModel:
         """Initialize policy-value network model."""
-        forest_config = self.config['forest']
         api_config = self.config['api']
+        forest_config = self.config['forest']
         
         return PolicyValueModel(
             openai_api_base=api_config['openai_api_base'],
             openai_api_key=api_config['openai_api_key'],
             value_api_base_url=api_config['value_api_base_url'],
-            value_api_endpoint=api_config['value_api_endpoint'],
-            temperature=forest_config['temperature'],
-            branch_factor=forest_config['branch_factor'],
+            policy_model=api_config['policy_model'],
             max_workers_policy=forest_config['max_workers_policy'],
             max_workers_value=forest_config['max_workers_value']
         )
@@ -58,13 +56,20 @@ class MCTSDataCollector:
         initial_values = self._get_initial_values(policy_value_model)
         forest_config = self.config['forest']
         
+        # Create wrapper function that adds branch_factor and temperature from config
+        def policy_value_fn(questions_states: List[Tuple[str, str]]) -> List[List[Tuple[str, float]]]:
+            return policy_value_model.get_policy_value([
+                (q, s, forest_config['branch_factor'], forest_config['temperature'])
+                for q, s in questions_states
+            ])
+        
         return MCTSForest(
             initial_values=initial_values,
             questions=self.questions,
             max_expansions=forest_config['max_expansions'],
             num_trees=forest_config['num_trees'],
             exploration_constant=forest_config['c_explore'],
-            policy_value_fn=policy_value_model.get_policy_value,
+            policy_value_fn=policy_value_fn,
             process_policy_trajectory=self.trajectory_processor.process_policy_trajectory,
             process_value_trajectory=self.trajectory_processor.process_value_trajectory,
             batch_size=forest_config['batch_size'],

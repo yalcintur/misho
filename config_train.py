@@ -44,8 +44,8 @@ DEFAULT_CONFIG = {
     'api': {
         'openai_api_base': "http://109.198.107.223:51181/v1",
         'openai_api_key': "sk-placeholder",
-        'value_api_base_url': "http://47.186.25.253:53620/predict",  #
-        'value_api_endpoint': None
+        'value_api_base_url': "http://47.186.25.253:53620/predict",  #"http://47.186.25.253:53620/predict"
+        'policy_model': "mstojkov/sft-135-checkpoint-3000-improved_policy"
     }
 }
 

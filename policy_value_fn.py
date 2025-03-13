@@ -13,10 +13,7 @@ class PolicyValueModel:
         openai_api_base: str,
         openai_api_key: str = "sk-placeholder",
         value_api_base_url: str = None,
-        value_api_endpoint = None,
         policy_model: str = "mstojkov/sft-135-checkpoint-3000-improved_policy",
-        temperature: float = 0.7,
-        branch_factor: int = 40,
         max_workers_policy: int = 80,
         max_workers_value: int = 30
     ):
@@ -27,16 +24,15 @@ class PolicyValueModel:
         
         # Value network setup
         self.value_network_url = value_api_base_url
-        # Sampling parameters
-        self.temperature = temperature
-        self.n_actions = branch_factor
+        
+        # Thread pool settings
         self.max_workers_policy = max_workers_policy
         self.max_workers_value = max_workers_value
 
-    def sample_policy(self, question: str, state: str, temperature: float, n_samples: int) -> List[str]:
+    def sample_policy(self, question: str, state: str, n_samples: int, temperature: float) -> List[str]:
         """Sample next states from policy network (LLM)."""
         try:
-            response = self._query_policy_network(question, state, temperature, n_samples)
+            response = self._query_policy_network(question, state, n_samples, temperature)
             if not response:
                 return []
             
@@ -111,18 +107,22 @@ class PolicyValueModel:
             self.estimate_value, questions_and_states, self.max_workers_value
         )
 
-    def get_policy_value(self, questions_and_states: List[Tuple[str, str]]) -> List[List[Tuple[str, float]]]:
-        """Sample actions from policy and estimate their values."""
-        if not questions_and_states:
+    def get_policy_value(self, questions_states_params: List[Tuple[str, str, int, float]]) -> List[List[Tuple[str, float]]]:
+        """Sample actions from policy and estimate their values.
+        Args:
+            questions_states_params: List of (question, state, branch_factor, temperature) tuples
+        """
+        if not questions_states_params:
             return []
         
         # Sample actions from policy
-        policy_inputs = [(q, s, self.temperature, self.n_actions) for q, s in questions_and_states]
+        # Fixed order: (question, state, branch_factor, temperature)
+        policy_inputs = [(q, s, n, temp) for q, s, n, temp in questions_states_params]
         next_states = self.parallel_process(self.sample_policy, policy_inputs, self.max_workers_policy)
     
         # Prepare value estimation inputs
         value_inputs, positions = [], []
-        questions = [q for q, _ in questions_and_states]
+        questions = [q for q, _, _, _ in questions_states_params]
         
         for i, (question, states) in enumerate(zip(questions, next_states)):
             for j, state in enumerate(states):
@@ -133,16 +133,15 @@ class PolicyValueModel:
         values = self.parallel_process(self.estimate_value, value_inputs, self.max_workers_value)
         
         # Combine results
-        result = [[] for _ in range(len(questions_and_states))]
+        result = [[] for _ in range(len(questions_states_params))]
         for (i, j), value in zip(positions, values):
             result[i].append((next_states[i][j], value))
         
         return result
 
-    def _query_policy_network(self, question: str, state: str, temperature: float, n_samples: int):
+    def _query_policy_network(self, question: str, state: str, n_samples: int, temperature: float):
         """Query the policy network (LLM) for next actions."""
         try:
-            # Send both question and state as context, but only get back the next action
             prompt = f"{question}\n{state}"
             return self.policy_network.chat.completions.create(
                 model=self.policy_model,
@@ -173,7 +172,7 @@ if __name__ == "__main__":
     ]
     
     # Get policy samples and their values
-    results = model.get_policy_value([(question, states[3])])
+    results = model.get_policy_value([(question, states[3], 40, 0.7)])
     for result_list in results:
         for next_state, value in result_list:
             print(f"{next_state}{value}")
