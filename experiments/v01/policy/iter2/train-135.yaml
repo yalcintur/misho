@@ -1,7 +1,7 @@
 train_arguments:
   model_function: "policy"
   device: "cuda"
-  model_name: "lakomey/sft-135-iter2-10-b32"
+  model_name: "lakomey/sft-135-iter1-10-b32"
   save_model_name: "smol-lm-135M-iter2"
   output_dir: "/models/iter2/"
   max_steps: 30000
