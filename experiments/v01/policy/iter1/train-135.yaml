@@ -8,9 +8,9 @@ train_arguments:
   per_device_train_batch_size: 32
   learning_rate: 8e-6
   logging_steps: 5
-  save_steps: 500
+  save_steps: 200
   evaluation_strategy: "steps"
-  eval_steps: 500
+  eval_steps: 200
   use_mps_device: false
   hub_model_id: "smol-lm-135M-instruct"
   dataset_file: "/home/misho/data/iter1_135_ds/policy_ds"
