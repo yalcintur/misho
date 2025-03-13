@@ -335,6 +335,7 @@ class Run_MCTS_Evaluate:
 
     def _check_evaluation_complete(self) -> bool:
         """Check if evaluation targets have been met."""
+
         return self.forest.completed_count >= len(self.questions)
 
     async def _monitor_collection(self) -> None:
@@ -350,7 +351,6 @@ class Run_MCTS_Evaluate:
                 last_stats = current_time
             
             if self._check_evaluation_complete():
-                print("\nEvaluation complete! All questions have been processed.")
                 self.is_running = False
                 break
             
@@ -365,15 +365,16 @@ class Run_MCTS_Evaluate:
         average_success_rate = 0.0
         
         try:
-            self.evaluation_task = asyncio.create_task(self.forest.run_forest())
+            # Start the stats monitoring in the background
             self.monitor_task = asyncio.create_task(self._monitor_collection())
             
-            # Wait for the monitor task to complete
-            await self.monitor_task
+            # Run the evaluation and wait for it to complete
+            average_success_rate = await self.forest.run_forest()
             
-            # Get the result from the evaluation task
-            average_success_rate = await self.evaluation_task
+            # Once evaluation is done, we don't need the monitor anymore
+            self.is_running = False
             
+            # Print final results
             print(f"\nEvaluation complete! Average success rate: {average_success_rate:.2%}")
             
         except asyncio.CancelledError:
@@ -383,6 +384,14 @@ class Run_MCTS_Evaluate:
         finally:
             self.is_running = False
             
+            # Clean up monitor task if it's still running
+            if self.monitor_task and not self.monitor_task.done():
+                self.monitor_task.cancel()
+                try:
+                    await self.monitor_task
+                except asyncio.CancelledError:
+                    pass
+        
         return average_success_rate
 
     async def stop_evaluation(self) -> None:

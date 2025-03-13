@@ -7,7 +7,7 @@ DEFAULT_CONFIG = {
     # Forest configuration
     'forest': {
         'num_trees': 100,
-        'max_expansions': 32,
+        'max_expansions': 64,
         'c_explore': 0.3,
         'temperature': 0.7,
         'branch_factor': 4,
@@ -33,10 +33,10 @@ DEFAULT_CONFIG = {
     
     # API configuration
     'api': {
-        'openai_api_base': "http://172.81.127.5:31540/v1",
+        'openai_api_base': "http://79.160.189.79:14161/v1",
         'openai_api_key': "sk-placeholder",
-        'value_api_base_url': "http://38.29.145.26:40308/predict",  #"http://38.29.145.26:40651/predict"
-        'policy_model': "lakomey/sft-135-iter1-10-b32"
+        'value_api_base_url': None,  #"http://38.29.145.26:40651/predict"
+        'policy_model': "mstojkov/sft-135-checkpoint-3000-improved_policy"
     }
 }
 
