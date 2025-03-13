@@ -14,9 +14,9 @@ from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import mean_squared_error
 from transformers import set_seed, get_cosine_schedule_with_warmup
-from models.valuefunction import ValueFunction  # Import the model defined in valuefunction.py
+from valuefunction import ValueFunction  # Import the model defined in valuefunction.py
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import setup_chat_format
+from datasets import load_dataset
 
 # Configure logging
 logging.basicConfig(
@@ -87,73 +87,65 @@ class ValueDataset(Dataset):
 
 
 
+
 def convert_hf_data_to_value_dataset(
-    data_files_or_path,
+    data_path_or_dataset,
     split_name=None
 ):
     """
-    Reads a Hugging Face dataset (with the given 'prompt'/'completion' structure)
-    and converts it into a ValueDataset of (user_text, float_label).
+    Reads a Hugging Face dataset (from disk or JSON) and converts it into a list
+    of (user_text, float_label) tuples.
 
     Args:
-        data_files_or_path: Path to a JSON/JSONL file or a dict of splits for load_dataset
-        tokenizer: A Hugging Face tokenizer instance
-        split_name: If the dataset has a named split ("train", "validation", etc.), specify here
-        max_length: Max sequence length for tokenization
+        data_path_or_dataset: Either a path to a dataset folder (for load_from_disk)
+                              or a path to a JSON/JSONL file.
+        split_name: If the dataset has a named split ("train", "validation", etc.), specify it.
 
     Returns:
-        A ValueDataset instance
+        List of tuples (user_text, score)
     """
 
-    # Load the dataset. For a single JSONL file: load_dataset("json", data_files="mydata.jsonl")
-    hugging_face_format_dataset = load_dataset("json", data_files=data_files_or_path)
-
-    # If there's a specific split, select it; otherwise default to "train" if only one split
-    if split_name is not None:
-        hugging_face_format_datase = hugging_face_format_dataset[split_name]
-    else:
-        # if there's only one split, we can do raw_dset["train"]
-        # but if the dataset is unlabeled or doesn't have "train" key, adjust accordingly
-        if "train" in hugging_face_format_datase:
-            hugging_face_format_datase = hugging_face_format_datase["train"]
+    # Determine if we're loading from disk or JSON file
+    if isinstance(data_path_or_dataset, str):  
+        if data_path_or_dataset.endswith(".json") or data_path_or_dataset.endswith(".jsonl"):
+            # JSON dataset (uses load_dataset)
+            dataset = load_dataset("json", data_files=data_path_or_dataset)
         else:
-            # single-split dataset
-            hugging_face_format_dataset = next(iter(hugging_face_format_dataset.values()))
+            # Saved Hugging Face dataset (uses load_from_disk)
+            dataset = load_from_disk(data_path_or_dataset)
+    else:
+        # The dataset is already loaded, use it directly
+        dataset = data_path_or_dataset
+
+    # If a specific split is requested (e.g., "train", "validation"), select it
+    if split_name:
+        dataset = dataset[split_name]
 
     data_list = []
     invalid_count = 0
 
-    # Go through each sample in the dataset
-    for example in tqdm(hugging_face_format_dataset, desc="Converting HF data to ValueDataset"):
+    # Iterate through the dataset
+    for example in tqdm(dataset, desc="Converting HF data to ValueDataset"):
         try:
-            # 'prompt' is an array of dicts with "role" = "user"
-            # We'll assume there's exactly one item in prompt or we just take the first
-            user_prompt = example["prompt"]
-            if not user_prompt or len(user_prompt) == 0:
+            # Extract the user prompt
+            user_prompt = example.get("prompt", [])
+            if not user_prompt or not isinstance(user_prompt, list):
                 invalid_count += 1
                 continue
 
-            # Usually user_prompt[0] is {"role": "user", "content": "..."}
             user_text = user_prompt[0].get("content", "").strip()
             if not user_text:
                 invalid_count += 1
                 continue
             
-            # 'completion' is an array of dicts with "role" = "assistant"
-            # We'll assume there's exactly one item in completion or we just take the first
-            assistant_prompt = example["completion"]
-            if not assistant_prompt or len(assistant_prompt) == 0:
+            # Extract the assistant response (completion)
+            assistant_prompt = example.get("completion", [])
+            if not assistant_prompt or not isinstance(assistant_prompt, list):
                 invalid_count += 1
                 continue
 
-            # assistant_prompt[0] is {"role": "assistant", "content": "some float as string"}
             score_str = assistant_prompt[0].get("content", "").strip()
-            score_val = float(score_str)  # convert to float
-
-            # Optional: check if score is in 0.0 - 1.0, if needed
-            # if not (0.0 <= score_val <= 1.0):
-            #     invalid_count += 1
-            #     continue
+            score_val = float(score_str)  # Convert to float
 
             data_list.append((user_text, score_val))
 
@@ -163,8 +155,8 @@ def convert_hf_data_to_value_dataset(
 
     print(f"Skipped {invalid_count} malformed entries.")
 
-    # Return a ValueDataset instance
     return data_list
+
 
 
 
@@ -200,6 +192,9 @@ def finetune_value(train_config):
     np.random.seed(train_config["seed"])
     
     # Load and preprocess data
+
+
+    
     training_data = convert_hf_data_to_value_dataset(train_config["training_data_file"], "train")
     validation_data = convert_hf_data_to_value_dataset(train_config["validation_data_file"], "train")
     
