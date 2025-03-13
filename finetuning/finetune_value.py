@@ -16,7 +16,7 @@ from sklearn.metrics import mean_squared_error
 from transformers import set_seed, get_cosine_schedule_with_warmup
 from valuefunction import ValueFunction  # Import the model defined in valuefunction.py
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import load_dataset
+from datasets import load_from_disk
 
 # Configure logging
 logging.basicConfig(
@@ -193,7 +193,13 @@ def finetune_value(train_config):
     
     # Load and preprocess data
 
+    trainer_info = {
+    "batch_losses": [],          
+    "validation_checkpoints": {} 
+    }
 
+    running_loss = 0.0  # accumulates loss for running average
+    num_batches = 0 
     
     training_data = convert_hf_data_to_value_dataset(train_config["training_data_file"], "train")
     validation_data = convert_hf_data_to_value_dataset(train_config["validation_data_file"], "train")
@@ -248,6 +254,7 @@ def finetune_value(train_config):
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}")
         for step, batch in progress_bar:
             global_step += 1
+            num_batches += 1
             inputs = {k: v.to(train_config["device"]) for k, v in batch.items()}
             labels = inputs.pop("labels")
             outputs = model(**inputs)
@@ -261,13 +268,31 @@ def finetune_value(train_config):
                 optimizer.zero_grad()
             
             epoch_loss += loss.item()
-            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+            running_loss = epoch_loss / num_batches
+            progress_bar.set_postfix({
+            "batch_loss": f"{loss.item():.4f}",
+            })
+            if num_batches % int(len(progress_bar)*train_config["percent_epoch"]//10) == 0:
+               print(running_loss)
             
-            # Run validation every half epoch
-            if global_step % 1200 == 0:
+
+
+            current_lr = scheduler.get_last_lr()[0] if scheduler.get_last_lr() else None
+            trainer_info["batch_losses"].append({
+            "global_step": global_step,
+            "batch_index": step,
+            "loss": loss.item(),
+            "lr": current_lr
+             })
+
+            epoch_step = int(len(train_loader) * train_config["percent_epoch"]) #after what percentage of epoch we should evalaute
+            # Run validation every tenth epoch
+            if global_step %  epoch_step == 0:
                 model.eval()
                 val_loss = evaluate_model(model, val_loader, train_config["device"])
                 logger.info(f"Global step {global_step} - Validation CrossEntropy Loss: {val_loss:.4f}")
+                trainer_info["validation_checkpoints"][global_step] = val_loss
+
         
                 # Print results for 20 examples from the validation set
                 #logger.info("Example predictions from validation set:")
@@ -288,6 +313,9 @@ def finetune_value(train_config):
                     # Save the full model (not just state_dict)
                     torch.save(model, os.path.join(best_folder, "full_model.pt"))
                     tokenizer.save_pretrained(best_folder)
+                    checkpoint_info_path = os.path.join(best_folder, "trainer_info.json")
+                    with open(checkpoint_info_path, "w") as f:
+                        json.dump(trainer_info, f, indent=4)
                     logger.info(f"Saved full model at global step {global_step}")
                 else:
                     patience_counter += 1
@@ -304,15 +332,8 @@ def finetune_value(train_config):
 
     # Final evaluation on test set
     logger.info("Starting final evaluation on test set...")
-    if best_folder is not None:
-        # Load the best full model
-        model = torch.load(os.path.join(best_folder, "full_model.pt"))
-    test_dataset = ValueDataset(test_split, tokenizer)
-    test_loader = DataLoader(test_dataset, batch_size=train_config["batch_size"], collate_fn=test_dataset.collate_fn)
-    test_rmse = evaluate_model(model, test_loader, train_config["device"])
-    logger.info(f"Final Test RMSE: {test_rmse:.4f}")
     
-    return model, test_split
+   
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

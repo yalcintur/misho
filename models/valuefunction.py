@@ -1,4 +1,3 @@
-# valuefunction.py
 import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -19,44 +18,25 @@ class ValueFunction(nn.Module):
         """
         super().__init__()
         
-       
-                self.base_model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-135M")
-                hidden_size = self.base_model.config.hidden_size
-                self.value_head = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size * 2),
-                    nn.ReLU(),
-                    nn.Linear(hidden_size * 2, 1),
-                )
-                self.tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M")
-                
-                # Now try to load the state dict
-                try:
-                    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-                        self.load_state_dict(checkpoint["model_state_dict"])
-                    else:
-                        self.load_state_dict(checkpoint)
-                except Exception as e:
-                    raise ValueError(f"Failed to load model from checkpoint: {e}")
-        else:
-            # Standard initialization - load base model and create new value head
-            print(f"Loading base model: {model_name} and initializing value head")
-            self.base_model = AutoModelForCausalLM.from_pretrained(model_name)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            
-            hidden_size = self.base_model.config.hidden_size
-            
-            # Enhanced value head
-            self.value_head = nn.Sequential(
-                nn.Linear(hidden_size, hidden_size * 2),
-                nn.ReLU(),
-                nn.Linear(hidden_size * 2, 1),
-            )
-            
-            # Initialize weights for the value head layers
-            nn.init.kaiming_normal_(self.value_head[0].weight, mode='fan_in', nonlinearity='linear')
-            nn.init.zeros_(self.value_head[0].bias)
-            nn.init.kaiming_normal_(self.value_head[-1].weight, mode='fan_in', nonlinearity='linear')
-            nn.init.zeros_(self.value_head[-1].bias)
+        # Load base model
+        self.base_model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        # Get hidden size from the model configuration
+        hidden_size = self.base_model.config.hidden_size
+        
+        # Define value head
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size * 2),
+            nn.ReLU(),
+            nn.Linear(hidden_size * 2, 1),
+        )
+        
+        # Initialize weights for the value head layers
+        nn.init.kaiming_normal_(self.value_head[0].weight, mode='fan_in', nonlinearity='linear')
+        nn.init.zeros_(self.value_head[0].bias)
+        nn.init.kaiming_normal_(self.value_head[-1].weight, mode='fan_in', nonlinearity='linear')
+        nn.init.zeros_(self.value_head[-1].bias)
         
         # Configure tokenizer for right padding (needed for correct last-token extraction)
         if self.tokenizer:
@@ -87,11 +67,13 @@ class ValueFunction(nn.Module):
         
         # Determine the position of the last non-padded token
         seq_lens = attention_mask.sum(dim=1) - 1 if attention_mask is not None else torch.tensor([input_ids.shape[-1]-1]*input_ids.shape[0])
+        
         # Gather the hidden state corresponding to the last token of each sequence
         pooled = last_hidden[torch.arange(last_hidden.size(0)), seq_lens]
+        
         return self.value_head(pooled).squeeze(-1)
             
-    def prepare_input(self, conversations):
+    def prepare_input(self, state):
         """
         Convert conversation format to tokenized input for the model
         
@@ -102,42 +84,22 @@ class ValueFunction(nn.Module):
         Returns:
             Tokenized input ready for the model with input_ids and attention_mask
         """
-        # Format conversations
-        formatted_texts = []
-        for conv in conversations:
-            formatted_texts.append(conv)
-        
+
         # Tokenize with the properly configured tokenizer
-        tokenized_inputs = self.tokenizer.apply_chat_template(
-            formatted_texts,
+        
+        
+        # Ensure we return a dictionary with input_ids and attention_mask
+        tokenized_inputs = self.tokenizer(
+            state,
             return_tensors="pt",
-            padding=True,
+            padding="max_length",
             truncation=True,
             max_length=256
         )
-        
-        # Handle different return types from tokenizers
-        if isinstance(tokenized_inputs, torch.Tensor):
-            # If it's a tensor, wrap it in a dictionary and create attention_mask
-            input_ids = tokenized_inputs
-            attention_mask = torch.ones_like(input_ids)
-            return {'input_ids': input_ids, 'attention_mask': attention_mask}
-        elif hasattr(tokenized_inputs, 'input_ids'):
-            # If it's a BatchEncoding object, convert to dict and ensure attention_mask exists
-            input_ids = tokenized_inputs.input_ids
-            if hasattr(tokenized_inputs, 'attention_mask'):
-                attention_mask = tokenized_inputs.attention_mask
-            else:
-                attention_mask = torch.ones_like(input_ids)
-            return {'input_ids': input_ids, 'attention_mask': attention_mask}
-        
-        # If it's already a dictionary, ensure it has attention_mask
-        if 'attention_mask' not in tokenized_inputs:
-            tokenized_inputs['attention_mask'] = torch.ones_like(tokenized_inputs['input_ids'])
-        
         return tokenized_inputs
+        
     
-    def predict(self, conversations: List[Dict[str, str]]) -> torch.Tensor:
+    def predict(self, state : str) -> torch.Tensor:
         """
         Make value predictions for a list of conversations
         
@@ -147,15 +109,11 @@ class ValueFunction(nn.Module):
         Returns:
             Value predictions (0-1 probability)
         """
-        # Prepare inputs
-        inputs = self.prepare_input([conversations])
-        
-        # Move inputs to the same device as the model
+        inputs = self.prepare_input(state)
         inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
-        
-        # Make prediction
+    
+    # Make prediction
         with torch.no_grad():
             value = self.forward(**inputs)
             value = torch.sigmoid(value)  # Apply sigmoid to get probability
-            
         return value
