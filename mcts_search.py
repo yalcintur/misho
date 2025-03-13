@@ -26,14 +26,9 @@ class MCTSNode:
 
     def add_children(self, state_values: list[tuple[str, float]]):
         """Add child nodes with their value estimates."""
-        for state, value in state_values:
-            self.children.append(MCTSNode(
-                state=state, 
-                parent=self, 
-                visit_count=0, 
-                action_value=value, 
-                value_estimate=value
-            ))
+        self.children.extend([MCTSNode(state=state, parent=self, visit_count=0, 
+                                      action_value=value, value_estimate=value) 
+                             for state, value in state_values])
 
     def evaluate_terminal_state(self, question: str) -> float:
         """Evaluate if terminal state solves the 24 game."""
@@ -48,11 +43,17 @@ class MCTSNode:
                 return 0.0
             
             expr_nums = sorted([int(n) for n in re.findall(r'\d+', parts[0])])
-            if expr_nums != question_nums or abs(eval(parts[0]) - 24) > 1e-6:
-                return 0.0
-            return 1.0
+            return 1.0 if expr_nums == question_nums and abs(eval(parts[0]) - 24) <= 1e-6 else 0.0
         except:
             return 0.0
+
+    @property
+    def favourite_child(self) -> 'MCTSNode':
+        """Return child with highest visit count, breaking ties with Q value."""
+        if not self.has_children:
+            raise ValueError("Node has no children")
+            
+        return max(self.children, key=lambda child: (child.visit_count, child.action_value))
 
 class MCTSTree:
     """Single MCTS tree for exploring solutions to a question."""
