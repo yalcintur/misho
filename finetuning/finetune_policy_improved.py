@@ -22,7 +22,7 @@ def finetune_policy(train_config):
     device = train_config["device"]
 
     # Load Model and Tokenizer
-    model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_name, ignore_mismatched_sizes=True).to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     # Load dataset
