@@ -1,4 +1,5 @@
 train_arguments:
+  model_function: "policy"
   device: "cuda"
   model_name: "HuggingFaceTB/SmolLM2-135M-Instruct"
   save_model_name: "smol-lm-135M-instruct"

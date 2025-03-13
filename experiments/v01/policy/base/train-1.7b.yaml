@@ -1,5 +1,6 @@
 # Policy function finetuning
 train_arguments:
+  model_function: "policy"
   device: "cuda"
   model_name: "HuggingFaceTB/SmolLM2-1.7B-Instruct"
   save_model_name: "smol-lm-1.7b-instruct-base"
