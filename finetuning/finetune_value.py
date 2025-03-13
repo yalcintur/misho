@@ -25,12 +25,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+
 class ValueDataset(Dataset):
     """
     Custom dataset for value function training.
-    Each example is a tuple: (conversation, score)
+    Each example is a tuple: (state_string, score).
+
+    Example:
+       data[i] = ("10 11 11 12\n11-10=1 (left: 11, 12, 1)\n", 1.0)
     """
-    def __init__(self, data, tokenizer, max_length=1024):
+    def __init__(self, data, tokenizer, max_length=256):
+        """
+        Args:
+            data: A list of (state_string, score). 
+                  E.g. [("10 11 11 12\n11-10=1 ...", 1.0), ...]
+            tokenizer: A Hugging Face tokenizer (like GPT2Tokenizer, etc.)
+            max_length: Maximum sequence length for tokenization.
+        """
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -39,104 +51,122 @@ class ValueDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        conversation, score = self.data[idx]
-        return conversation, torch.tensor(score, dtype=torch.float32)
+        """
+        Returns a single example: (state_string, score) in raw form.
+        We'll transform them to tensors in collate_fn.
+        """
+        state_string, score = self.data[idx]
+        return state_string, torch.tensor(score, dtype=torch.float32)
 
     def collate_fn(self, batch):
-        conversations, scores = zip(*batch)
-        inputs = self.tokenizer.apply_chat_template(
-            conversations,
+        """
+        Collates a list of (state_string, score) into a batch of tensors:
+            - input_ids
+            - attention_mask
+            - labels (float scores)
+        """
+        states, scores = zip(*batch)
+        
+        # Tokenize the state strings
+        encoded = self.tokenizer(
+            list(states),
             padding="max_length",
             truncation=True,
-            max_length=256,
+            max_length=self.max_length,
             return_tensors="pt"
         )
-        # If inputs is a dict, use its keys; otherwise, assume it's a tensor of input_ids.
-        if isinstance(inputs, dict):
-            input_ids = inputs["input_ids"]
-            attention_mask = inputs["attention_mask"]
-        else:
-            input_ids = inputs
-            attention_mask = torch.ones_like(input_ids)
+
+        # Convert scores to a tensor
+        labels = torch.stack(scores)
 
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": torch.stack(scores)
+            "input_ids": encoded["input_ids"],
+            "attention_mask": encoded["attention_mask"],
+            "labels": labels
         }
 
-def convert_jsonl_to_train_data(jsonl_file_path: str):
+
+
+def convert_hf_data_to_value_dataset(
+    data_files_or_path,
+    split_name=None
+):
     """
-    Converts a JSONL file to a list of (conversation, score) tuples.
-    Expects each line to contain a JSON object with keys 'prompt' and 'completion'.
-    Only user messages are extracted for the conversation.
+    Reads a Hugging Face dataset (with the given 'prompt'/'completion' structure)
+    and converts it into a ValueDataset of (user_text, float_label).
+
+    Args:
+        data_files_or_path: Path to a JSON/JSONL file or a dict of splits for load_dataset
+        tokenizer: A Hugging Face tokenizer instance
+        split_name: If the dataset has a named split ("train", "validation", etc.), specify here
+        max_length: Max sequence length for tokenization
+
+    Returns:
+        A ValueDataset instance
     """
-    train_data = []
+
+    # Load the dataset. For a single JSONL file: load_dataset("json", data_files="mydata.jsonl")
+    hugging_face_format_dataset = load_dataset("json", data_files=data_files_or_path)
+
+    # If there's a specific split, select it; otherwise default to "train" if only one split
+    if split_name is not None:
+        hugging_face_format_datase = hugging_face_format_dataset[split_name]
+    else:
+        # if there's only one split, we can do raw_dset["train"]
+        # but if the dataset is unlabeled or doesn't have "train" key, adjust accordingly
+        if "train" in hugging_face_format_datase:
+            hugging_face_format_datase = hugging_face_format_datase["train"]
+        else:
+            # single-split dataset
+            hugging_face_format_dataset = next(iter(hugging_face_format_dataset.values()))
+
+    data_list = []
     invalid_count = 0
-    
-    with open(jsonl_file_path, 'r', encoding='utf-8') as f:
-        for line in tqdm(f, desc="Processing JSONL"):
-            line = line.strip()
-            if not line:
-                continue
-            
-            try:
-                data = json.loads(line)
-                if isinstance(data, str):
-                    try:
-                        data = json.loads(data)
-                    except json.JSONDecodeError:
-                        invalid_count += 1
-                        continue
-                
-                # Check for required keys
-                if not all(key in data for key in ("prompt", "completion")):
-                    invalid_count += 1
-                    continue
-                
-                # Extract only user messages
-                user_messages = [msg for msg in data["prompt"] if msg["role"] == "user"]
-                if not user_messages:
-                    invalid_count += 1
-                    continue
-                
-                # Extract score from the completion content
-                completion = data["completion"]
-                try:
-                    if isinstance(completion, list):
-                        content = completion[0].get("content", "")
-                    elif isinstance(completion, dict):
-                        content = completion.get("content", "")
-                    else:
-                        content = str(completion)
-                    score = float(content)
-                    # Optionally enforce score range (e.g., 0.0 to 1.0)
-                    if not (0.0 <= score <= 1.0):
-                        raise ValueError("Score out of expected range")
-                except (ValueError, KeyError, TypeError):
-                    invalid_count += 1
-                    continue
-                
-                train_data.append((user_messages, score))
-                
-            except json.JSONDecodeError:
+
+    # Go through each sample in the dataset
+    for example in tqdm(hugging_face_format_dataset, desc="Converting HF data to ValueDataset"):
+        try:
+            # 'prompt' is an array of dicts with "role" = "user"
+            # We'll assume there's exactly one item in prompt or we just take the first
+            user_prompt = example["prompt"]
+            if not user_prompt or len(user_prompt) == 0:
                 invalid_count += 1
                 continue
-    
-    logger.warning(f"Skipped {invalid_count} invalid/malformed entries")
-    return train_data
 
-def split_data(data, ratios=(0.8, 0.1, 0.1)):
-    """
-    Splits data into train, validation, and test sets based on provided ratios.
-    The ratios should sum to 1.0.
-    """
-    assert sum(ratios) == 1.0, "Split ratios must sum to 1.0"
-    total = len(data)
-    train_size = int(ratios[0] * total)
-    val_size = int(ratios[1] * total)
-    test_size = total - train_size - val_size
-    return random_split(data, [train_size, val_size, test_size])
+            # Usually user_prompt[0] is {"role": "user", "content": "..."}
+            user_text = user_prompt[0].get("content", "").strip()
+            if not user_text:
+                invalid_count += 1
+                continue
+            
+            # 'completion' is an array of dicts with "role" = "assistant"
+            # We'll assume there's exactly one item in completion or we just take the first
+            assistant_prompt = example["completion"]
+            if not assistant_prompt or len(assistant_prompt) == 0:
+                invalid_count += 1
+                continue
+
+            # assistant_prompt[0] is {"role": "assistant", "content": "some float as string"}
+            score_str = assistant_prompt[0].get("content", "").strip()
+            score_val = float(score_str)  # convert to float
+
+            # Optional: check if score is in 0.0 - 1.0, if needed
+            # if not (0.0 <= score_val <= 1.0):
+            #     invalid_count += 1
+            #     continue
+
+            data_list.append((user_text, score_val))
+
+        except (ValueError, KeyError, TypeError):
+            invalid_count += 1
+            continue
+
+    print(f"Skipped {invalid_count} malformed entries.")
+
+    # Return a ValueDataset instance
+    return data_list
+
+
 
 def evaluate_model(model, dataloader, device):
     """
@@ -170,18 +200,17 @@ def finetune_value(train_config):
     np.random.seed(train_config["seed"])
     
     # Load and preprocess data
-    all_data = convert_jsonl_to_train_data(train_config["dataset_file"])
-    train_split, val_split, test_split = split_data(all_data, tuple(train_config["split_ratios"]))
+    training_data = convert_hf_data_to_value_dataset(train_config["training_data_file"], "train")
+    validation_data = convert_hf_data_to_value_dataset(train_config["validation_data_file"], "train")
     
     # Initialize the model and tokenizer
     model = ValueFunction(train_config["model_name"]).to(train_config["device"])
     tokenizer = model.tokenizer
     
-    model, tokenizer = setup_chat_format(model=model, tokenizer=tokenizer)
 
     # Create dataset objects and data loaders
-    train_dataset = ValueDataset(train_split, tokenizer)
-    val_dataset = ValueDataset(val_split, tokenizer)
+    train_dataset = ValueDataset(training_data, tokenizer)
+    validation_dataset = ValueDataset(validation_data, tokenizer)
     
     train_loader = DataLoader(
         train_dataset,
@@ -190,9 +219,9 @@ def finetune_value(train_config):
         collate_fn=train_dataset.collate_fn
     )
     val_loader = DataLoader(
-        val_dataset,
+        validation_dataset,
         batch_size=train_config["batch_size"],
-        collate_fn=val_dataset.collate_fn
+        collate_fn=validation_dataset.collate_fn
     )
     
     base_lr = float(train_config["base_lr"])
@@ -212,7 +241,7 @@ def finetune_value(train_config):
     )
     
     global_step = 0
-    best_rmse = float('inf')
+    best_loss = float('inf')
     patience_counter = 0
     best_folder = None
 
@@ -242,22 +271,22 @@ def finetune_value(train_config):
             # Run validation every half epoch
             if global_step % 1200 == 0:
                 model.eval()
-                val_rmse = evaluate_model(model, val_loader, train_config["device"])
-                logger.info(f"Global step {global_step} - Validation RMSE: {val_rmse:.4f}")
-                
+                val_loss = evaluate_model(model, val_loader, train_config["device"])
+                logger.info(f"Global step {global_step} - Validation CrossEntropy Loss: {val_loss:.4f}")
+        
                 # Print results for 20 examples from the validation set
-                logger.info("Example predictions from validation set:")
+                #logger.info("Example predictions from validation set:")
                 # Loop over the first 20 examples
-                for i in range(min(20, len(val_dataset))):
+                """for i in range(min(20, len(val_dataset))):
                     conversation, true_score = val_dataset[i]
                     # Using the model's predict method (ensure evaluation mode)
                     with torch.no_grad():
                         prediction = model.predict(conversation)
                     logger.info(f"Example {i+1}: True Score: {true_score.item():.4f}, Predicted Score: {prediction.item():.4f}")
-                    logger.info(f"Conversation: {conversation}")
+                    logger.info(f"Conversation: {conversation}")"""
                 
-                if val_rmse < best_rmse:
-                    best_rmse = val_rmse
+                if val_loss < best_loss:
+                    best_loss = val_loss
                     patience_counter = 0
                     best_folder = os.path.join(train_config["output_dir"], f"batch_{global_step}")
                     os.makedirs(best_folder, exist_ok=True)
