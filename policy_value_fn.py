@@ -13,7 +13,7 @@ class PolicyValueModel:
         openai_api_base: str,
         openai_api_key: str = "sk-placeholder",
         value_api_base_url: str = None,
-        policy_model: str = "lakomey/sft-1.7b-base-150-b8", #"mstojkov/sft-135-checkpoint-3000-improved_policy",
+        policy_model: str = "lakomey/sft-135-iter1-10-b32", #"mstojkov/sft-135-checkpoint-3000-improved_policy",
         max_workers_policy: int = 80,
         max_workers_value: int = 30
     ):
@@ -37,7 +37,9 @@ class PolicyValueModel:
                 return []
             
             # Add newline for non-terminal states
-            if len(state.split("\n")) >= 4 and not state.rstrip().endswith("."):
+            if len(state.split("\n")) < 4:
+                suffix = "\n"
+            elif len(state.split("\n")) >= 4 and not state.rstrip().endswith("."):
                 suffix = "."
             else:
                 suffix = ""
@@ -161,8 +163,8 @@ class PolicyValueModel:
 
 if __name__ == "__main__":
     model = PolicyValueModel(
-        openai_api_base="http://79.160.189.79:14673/v1",
-        value_api_base_url = None #"http://185.113.120.195:50005/predict"
+        openai_api_base="http://172.81.127.5:31540/v1",
+        value_api_base_url = "http://38.29.145.26:40651/predict" #"http://185.113.120.195:50005/predict"
     )
     
     # Test trajectory
@@ -175,7 +177,7 @@ if __name__ == "__main__":
     ]
     
     # Get policy samples and their values
-    results = model.get_policy_value([(question, states[3], 40, 0.7)])
+    results = model.get_policy_value([(question, states[1], 5, 0.7)])
     for result_list in results:
         for next_state, value in result_list:
             print(f"{next_state}{value}")
