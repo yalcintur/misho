@@ -1,7 +1,7 @@
 import argparse
 from datasets import load_dataset, DatasetDict
 
-def prepare_dataset(train_file, test_file, output_dir, val_size=0.1):
+def prepare_dataset(train_file, val_file, output_dir, test_file=None):
     """
     Prepares a Hugging Face dataset from JSONL files by splitting it into train and validation sets.
 
@@ -14,25 +14,18 @@ def prepare_dataset(train_file, test_file, output_dir, val_size=0.1):
     Returns:
         DatasetDict: A dictionary containing train, validation, and optionally test datasets.
     """
-    # Load train dataset
-    train_data = load_dataset("json", data_files=train_file, split="train")
+    train_data = load_dataset("json", data_files=train_file)
+    val_data = load_dataset("json", data_files=val_file)
 
     dataset_dict = {}
 
-    # Compute split index for train/validation division (90-10 split)
-    total_size = len(train_data)
-    train_split_idx = int((1 - val_size) * total_size)
+    dataset_dict["train"] = train_data
+    dataset_dict["validation"] = val_data
 
-    # Assign splits
-    dataset_dict["train"] = train_data.select(range(train_split_idx))
-    dataset_dict["validation"] = train_data.select(range(train_split_idx, total_size))
-
-    # Load and add test dataset if provided
     if test_file:
         test_data = load_dataset("json", data_files=test_file, split="train")
         dataset_dict["test"] = test_data
 
-    # Convert to DatasetDict and save
     dataset_dict = DatasetDict(dataset_dict)
     dataset_dict.save_to_disk(output_dir)
 
@@ -42,16 +35,14 @@ def prepare_dataset(train_file, test_file, output_dir, val_size=0.1):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare a Hugging Face dataset from JSONL files")
     
-    parser.add_argument("--train_file", type=str, default="/home/yalcintur/Downloads/value_training_data-iter1.jsonl", help="Path to the training JSONL file")
-    parser.add_argument("--test_file", type=str, default="", help="Path to the test JSONL file (optional)")
-    parser.add_argument("--output_dir", type=str, default="/home/yalcintur/workspace/courses/misho/iter1_135_ds", help="Directory to save the processed dataset")
-    parser.add_argument("--val_size", type=float, default=0.1, help="Proportion of the train dataset for the validation set")
+    parser.add_argument("--train_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_training_data_iter_1-f.jsonl", help="Path to the training JSONL file")
+    parser.add_argument("--val_file", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_validation_data_iter_1-f.jsonl", help="Path to the test JSONL file (optional)")
+    parser.add_argument("--output_dir", type=str, default="/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/value_ds", help="Directory to save the processed dataset")
 
     args = parser.parse_args()
 
     prepare_dataset(
         args.train_file, 
-        args.test_file if args.test_file else None, 
+        args.val_file, 
         args.output_dir, 
-        val_size=args.val_size
     )
