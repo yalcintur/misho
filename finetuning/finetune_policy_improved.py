@@ -1,3 +1,4 @@
+import os
 import argparse
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, EarlyStoppingCallback
@@ -25,24 +26,27 @@ def finetune_policy(train_config):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     # Load dataset
-    dataset = load_from_disk(train_config["dataset_file"])
+    train_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "train"))
+    val_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "validation"))
+    train_dataset = train_dataset['train']
+    val_dataset = val_dataset['train']
 
     # Training Configuration
     sft_config = SFTConfig(
         output_dir=output_dir,
         max_steps=max_steps,
         gradient_accumulation_steps=4,
-        per_device_train_batch_size=1,
+        per_device_train_batch_size=per_device_train_batch_size,
         learning_rate=learning_rate,
         logging_steps=logging_steps,
         save_steps=save_steps,
         save_strategy="steps",
         evaluation_strategy=evaluation_strategy,
         eval_steps=eval_steps,
-        save_total_limit=2,  # Keep only last 2 best models
-        metric_for_best_model="eval_loss",  # Track validation loss
-        greater_is_better=False,  # Lower loss is better
-        load_best_model_at_end=True,  # Load the best checkpoint at the end
+        save_total_limit=2,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        load_best_model_at_end=True,
         use_mps_device=(device == "mps"),
         hub_model_id=save_model_name,
     )
@@ -51,9 +55,9 @@ def finetune_policy(train_config):
     trainer = SFTTrainer(
         model=model,
         args=sft_config,
-        train_dataset=dataset['train'],
+        train_dataset=train_dataset,
         tokenizer=tokenizer,
-        eval_dataset=dataset['validation'],
+        eval_dataset=val_dataset,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],  # Stop if no improvement in 3 evals
     )
 
