@@ -19,13 +19,11 @@ def finetune_policy(train_config):
     evaluation_strategy = train_config["evaluation_strategy"]
     eval_steps = int(train_config["eval_steps"])
     device = train_config["device"]
+    checkpoint = train_config["checkpoint"]
 
     # Load Model and Tokenizer
     model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    
-
 
     # Load dataset
     dataset = load_from_disk(train_config["dataset_file"])
@@ -60,7 +58,6 @@ def finetune_policy(train_config):
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],  # Stop if no improvement in 3 evals
     )
 
-    # Train and Save Best Model
     trainer.train()
     trainer.save_model(f"./{save_model_name}")
 
