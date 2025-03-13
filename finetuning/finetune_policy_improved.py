@@ -19,7 +19,6 @@ def finetune_policy(train_config):
     evaluation_strategy = train_config["evaluation_strategy"]
     eval_steps = int(train_config["eval_steps"])
     device = train_config["device"]
-    checkpoint = train_config["checkpoint"]
 
     # Load Model and Tokenizer
     model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
