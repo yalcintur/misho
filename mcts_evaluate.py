@@ -298,8 +298,7 @@ class Run_MCTS_Evaluate:
             openai_api_key=api_config['openai_api_key'],
             value_api_base_url=api_config['value_api_base_url'],
             policy_model=api_config['policy_model'],
-            max_workers_policy=forest_config['max_workers_policy'],
-            max_workers_value=forest_config['max_workers_value']
+            max_workers_policy=forest_config['max_workers_policy']
         )
     
     def _get_initial_values(self, model: PolicyValueModel) -> List[float]:
