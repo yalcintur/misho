@@ -24,10 +24,14 @@ DEFAULT_CONFIG = {
     
     # File paths configuration
     'paths': {
-        'questions_path': 'data_train.txt',
-        'policy_data_path': 'policy_training_data.jsonl',
-        'value_data_path': 'value_training_data.jsonl',
-        'stats_path': 'training_stats.json'
+        'train_questions_path': 'data_train.txt',
+        'val_questions_path': 'data_val.txt',
+        'train_policy_data_path': 'policy_training_data.jsonl',
+        'val_policy_data_path': 'policy_validation_data.jsonl',
+        'train_value_data_path': 'value_training_data.jsonl',
+        'val_value_data_path': 'value_validation_data.jsonl',
+        'train_stats_path': 'training_stats.json',
+        'val_stats_path': 'validation_stats.json'
     },
     
     # Intervals configuration

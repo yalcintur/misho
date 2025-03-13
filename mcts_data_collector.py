@@ -13,9 +13,10 @@ from config_train import get_config
 class MCTSDataCollector:
     """Collects and processes MCTS trajectories into training data for policy and value networks."""
     
-    def __init__(self, config: Dict):
-        """Initialize collector with configuration."""
+    def __init__(self, config: Dict, is_validation: bool = False):
+        """Initialize collector with configuration and mode."""
         self.config = config
+        self.is_validation = is_validation
         self.questions = self._load_questions()
         self.trajectory_processor = TrajectoryProcessor()
         self.forest = self._initialize_search()
@@ -23,8 +24,11 @@ class MCTSDataCollector:
         self.search_task = self.monitor_task = None
 
     def _load_questions(self) -> List[str]:
-        """Load questions from configured file."""
-        with open(self.config['paths']['questions_path'], 'r') as f:
+        """Load questions from configured file based on mode."""
+        questions_path = (self.config['paths']['val_questions_path'] 
+                         if self.is_validation 
+                         else self.config['paths']['train_questions_path'])
+        with open(questions_path, 'r') as f:
             return [line.strip() for line in f.readlines()]
 
     def _initialize_model(self) -> PolicyValueModel:
@@ -79,18 +83,17 @@ class MCTSDataCollector:
 
     async def _export_training_data(self) -> None:
         """Export processed policy and value training data."""
-        await self._save_training_data(
-            self.config['paths']['policy_data_path'],
-            self.forest.policy_training_data,
-            "Policy"
-        )
+        policy_path = (self.config['paths']['val_policy_data_path']
+                      if self.is_validation
+                      else self.config['paths']['train_policy_data_path'])
+        value_path = (self.config['paths']['val_value_data_path']
+                     if self.is_validation
+                     else self.config['paths']['train_value_data_path'])
+        
+        await self._save_training_data(policy_path, self.forest.policy_training_data, "Policy")
         self.forest.policy_training_data = []
         
-        await self._save_training_data(
-            self.config['paths']['value_data_path'],
-            self.forest.value_training_data,
-            "Value"
-        )
+        await self._save_training_data(value_path, self.forest.value_training_data, "Value")
         self.forest.value_training_data = []
 
     async def _save_collection_stats(self) -> None:
@@ -105,7 +108,10 @@ class MCTSDataCollector:
                 'runtime': runtime,
                 'api_throughput': self.forest.total_api_calls / runtime if runtime > 0 else 0
             }
-            with open(self.config['paths']['stats_path'], 'w') as f:
+            stats_path = (self.config['paths']['val_stats_path']
+                         if self.is_validation
+                         else self.config['paths']['train_stats_path'])
+            with open(stats_path, 'w') as f:
                 json.dump(stats, f, indent=2)
         except Exception as e:
             print(f"Error saving stats: {e}")
@@ -197,9 +203,19 @@ class MCTSDataCollector:
 async def main():
     """Main entry point for collection."""
     config = get_config()
-    collector = MCTSDataCollector(config=config)
     
+    # Training data collection
+    collector = MCTSDataCollector(config=config, is_validation=False)
     try:
+        print("Starting training data collection...")
+        await collector.start_collection()
+    except KeyboardInterrupt:
+        await collector.stop_collection()
+    
+    # Validation data collection
+    collector = MCTSDataCollector(config=config, is_validation=True)
+    try:
+        print("\nStarting validation data collection...")
         await collector.start_collection()
     except KeyboardInterrupt:
         await collector.stop_collection()
