@@ -2,7 +2,7 @@ import json
 import os
 
 # Define the parent directory to process
-parent_directory = "/home/yalcintur/workspace/courses/misho/data/iter2_135_ds"
+parent_directory = "/home/yalcintur/workspace/courses/misho/data/iter3_135_ds"
 
 # Iterate through all subdirectories
 for root, _, files in os.walk(parent_directory):
