@@ -33,6 +33,9 @@ def finetune_policy(train_config):
         train_dataset = train_dataset['train']
         val_dataset = val_dataset['train']
 
+    train_dataset = train_dataset.shuffle(seed=42)
+    val_dataset = val_dataset.shuffle(seed=42)
+
     # Training Configuration
     sft_config = SFTConfig(
         output_dir=output_dir,
