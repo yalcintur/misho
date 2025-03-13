@@ -63,7 +63,7 @@ def finetune_policy(train_config):
         train_dataset=train_dataset,
         tokenizer=tokenizer,
         eval_dataset=val_dataset,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],  # Stop if no improvement in 3 evals
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=10)],  # Stop if no improvement in 3 evals
     )
 
     trainer.train()
