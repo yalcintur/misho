@@ -28,8 +28,10 @@ def finetune_policy(train_config):
     # Load dataset
     train_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "train"))
     val_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "validation"))
-    train_dataset = train_dataset['train']
-    val_dataset = val_dataset['train']
+    
+    if "train" in train_dataset:
+        train_dataset = train_dataset['train']
+        val_dataset = val_dataset['train']
 
     # Training Configuration
     sft_config = SFTConfig(
