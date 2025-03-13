@@ -160,7 +160,7 @@ class ValueFunction(nn.Module):
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=512
+            max_length=256
         )
         
         # Handle different return types from tokenizers

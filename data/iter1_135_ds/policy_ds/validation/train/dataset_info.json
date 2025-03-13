@@ -1,0 +1,58 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "json",
+  "dataset_size": 309982,
+  "description": "",
+  "download_checksums": {
+    "/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/policy_validation_data_iter_1-f.jsonl": {
+      "num_bytes": 502300,
+      "checksum": null
+    }
+  },
+  "download_size": 502300,
+  "features": {
+    "prompt": [
+      {
+        "role": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "content": {
+          "dtype": "string",
+          "_type": "Value"
+        }
+      }
+    ],
+    "completion": [
+      {
+        "role": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "content": {
+          "dtype": "string",
+          "_type": "Value"
+        }
+      }
+    ]
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 812282,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 309982,
+      "num_examples": 2892,
+      "dataset_name": "json"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

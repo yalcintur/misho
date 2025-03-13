@@ -1,0 +1,16 @@
+# Policy function finetuning
+train_arguments:
+  device: "cuda"
+  model_name: "HuggingFaceTB/SmolLM2-135M-Instruct"
+  save_model_name: "smol-lm-135M-instruct"
+  output_dir: "/data/yalcin/sft_output_135-instruct"
+  max_steps: 10000
+  per_device_train_batch_size: 8
+  learning_rate: 6e-6
+  logging_steps: 5
+  save_steps: 1000
+  evaluation_strategy: "steps"
+  eval_steps: 1000
+  use_mps_device: false
+  hub_model_id: "smol-lm-135M-instruct"
+  dataset_file: "/home/weh4401/st/misho/dataset/game24"

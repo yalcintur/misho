@@ -1,5 +1,5 @@
-# Policy function finetuning
 train_arguments:
+  model_function: "policy"
   device: "cuda"
   model_name: "mstojkov/sft-135-checkpoint-3000-improved_policy"
   save_model_name: "smol-lm-135M-iter1"
@@ -13,4 +13,4 @@ train_arguments:
   eval_steps: 1000
   use_mps_device: false
   hub_model_id: "smol-lm-135M-instruct"
-  dataset_file: "/home/weh4401/st/misho/dataset/game24"
+  dataset_file: "/home/yalcintur/workspace/courses/misho/data/iter1_135_ds/policy_ds"

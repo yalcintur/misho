@@ -1,7 +1,7 @@
 import os
 import yaml
 import argparse
-from finetuning.finetune_policy_improved import finetune_policy
+from finetuning.finetune_policy import finetune_policy
 from finetuning.finetune_value import finetune_value
 def read_yaml(file_path):
     with open(file_path, 'r') as file:
