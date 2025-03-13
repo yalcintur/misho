@@ -19,54 +19,7 @@ class ValueFunction(nn.Module):
         """
         super().__init__()
         
-        # Check if model_name is a path to a saved model file
-        if load_full_model and os.path.exists(model_name):
-            print(f"Loading full model from checkpoint: {model_name}")
-            # Load the entire model from checkpoint
-            checkpoint = torch.load(model_name, map_location=torch.device('cpu'))
-            
-            # Handle different checkpoint formats
-            if isinstance(checkpoint, dict) and "model" in checkpoint:
-                # The checkpoint contains the model under the 'model' key
-                self.base_model = checkpoint["model"].base_model
-                self.value_head = checkpoint["model"].value_head
-                # Try to get the tokenizer if it exists
-                if hasattr(checkpoint["model"], "tokenizer"):
-                    self.tokenizer = checkpoint["model"].tokenizer
-                else:
-                    # Fall back to loading tokenizer from the same directory
-                    tokenizer_path = os.path.dirname(model_name)
-                    if os.path.exists(os.path.join(tokenizer_path, "tokenizer_config.json")):
-                        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-                    else:
-                        # Default to loading from the base model name if available
-                        base_model_name = checkpoint.get("base_model_name", "HuggingFaceTB/SmolLM2-135M")
-                        self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-            elif isinstance(checkpoint, ValueFunction):
-                # The checkpoint is a ValueFunction instance
-                self.base_model = checkpoint.base_model
-                self.value_head = checkpoint.value_head
-                self.tokenizer = checkpoint.tokenizer if hasattr(checkpoint, "tokenizer") else None
-            elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-                # The checkpoint contains a state_dict - need to first create the model structures
-                # then load the state_dict
-                temp_model = ValueFunction(model_name="HuggingFaceTB/SmolLM2-135M", dropout_rate=dropout_rate, load_full_model=False)
-                temp_model.load_state_dict(checkpoint["state_dict"])
-                self.base_model = temp_model.base_model
-                self.value_head = temp_model.value_head
-                self.tokenizer = temp_model.tokenizer
-            elif hasattr(checkpoint, "base_model") and hasattr(checkpoint, "value_head"):
-                # The checkpoint has the expected attributes directly
-                self.base_model = checkpoint.base_model
-                self.value_head = checkpoint.value_head
-                if hasattr(checkpoint, "tokenizer"):
-                    self.tokenizer = checkpoint.tokenizer
-                else:
-                    self.tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M")
-            else:
-                # Try to load state dict directly
-                print("Attempting to load as state dictionary")
-                # First create the standard model
+       
                 self.base_model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-135M")
                 hidden_size = self.base_model.config.hidden_size
                 self.value_head = nn.Sequential(
