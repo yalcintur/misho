@@ -61,7 +61,7 @@ class MCTSTree:
     def __init__(self, root_value: float, question: str, max_expansions: int, 
                  exploration_constant: float, request_queue):
         self.root = MCTSNode(state="", parent=None, visit_count=0, 
-                            action_value=0, value_estimate=root_value)
+                            action_value=root_value, value_estimate=root_value)
         self.question = question
         self.max_expansions = max_expansions
         self.exploration_constant = exploration_constant

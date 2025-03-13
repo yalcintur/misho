@@ -7,9 +7,10 @@ DEFAULT_CONFIG = {
     # Forest configuration for tuning
     'forest': {
         'num_trees': 100,  # Number of parallel trees to run
-        'exploration_constants': [0.1, 0.3, 0.5],  # Different exploration constants to evaluate
-        'branch_factors': [2, 3, 5],  # Different branching factors to evaluate
-        'temperatures': [0.5, 0.7, 0.9],  # Different temperatures to evaluate
+        'exploration_constants': [0.1],  # Different exploration constants to evaluate
+        'branch_factors': [2],  # Different branching factors to evaluate
+        'temperatures': [0.5],  # Different temperatures to evaluate
+        'max_forward_passes': 16,  # Maximum number of forward passes to evaluate
         'batch_size': 50,  # Batch size for policy-value network requests
         'batch_interval': 1.0,  # Time to wait for batching requests
         'max_workers_policy': 50,  # Max workers for policy network

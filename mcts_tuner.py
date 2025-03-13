@@ -13,9 +13,11 @@ import os
 class MCTSTree_Tuner:
     """Single MCTS tree for exploring solutions to a question."""
     
-    def __init__(self, root_value: float, question: str, exploration_constant: float, request_queue, tree_id: int):
+    def __init__(self, root_value: float, question: str, 
+                 exploration_constant: float, max_expansions: int,
+                 request_queue, tree_id: int):
         self.root = MCTSNode(state="", parent=None, visit_count=0, 
-                            action_value=0, value_estimate=root_value)
+                            action_value=root_value, value_estimate=root_value)
         self.question = question
         self.exploration_constant = exploration_constant
         self.request_queue = request_queue
@@ -24,6 +26,7 @@ class MCTSTree_Tuner:
         self.non_terminal_leaves = [self.root]
         self.terminal_leaves = []
         self.favourite_trajectories = []
+        self.max_expansions = max_expansions
 
     async def get_action_values(self, node: MCTSNode) -> list[tuple[str, float]]:
         """Get action-value pairs from policy-value network."""
@@ -61,7 +64,7 @@ class MCTSTree_Tuner:
     async def search(self):
         """Perform MCTS search and collect training data."""
         current = self.root
-        while self.non_terminal_leaves:
+        while self.non_terminal_leaves and self.expansion_count < self.max_expansions:
             if current.has_children:
                 current = self.select_child(current)
             elif current.is_terminal:
@@ -86,10 +89,13 @@ class MCTSTree_Tuner:
                     print(f"Expansion error: {e}")
                     break
             await asyncio.sleep(0)
-        
-        best_terminal = max(self.terminal_leaves, key=lambda node: node.value_estimate)
-        success = best_terminal.evaluate_terminal_state(self.question)
-        self.favourite_trajectories.append((self.expansion_count, int(success)))
+
+        if not self.non_terminal_leaves:
+            best_terminal = max(self.terminal_leaves, key=lambda node: node.value_estimate)
+            success = best_terminal.evaluate_terminal_state(self.question)
+            self.favourite_trajectories.append((self.expansion_count, int(success)))
+        else:
+            self.get_favourite_trajectory()
         
         return self.favourite_trajectories
     
@@ -100,13 +106,15 @@ class MCTSForest_Tuner:
     def __init__(self, initial_values: list[float], questions: list[str],
                  num_trees: int, exploration_constants: list[float], 
                  branch_factors: list[int], temperatures: list[float],
-                 policy_value_fn: Callable, batch_size: int, batch_interval: float):
+                 max_forward_passes: int, policy_value_fn: Callable, 
+                 batch_size: int, batch_interval: float):
         # Core parameters
         self.questions = questions
         self.initial_values = initial_values
         self.num_trees = num_trees
         self.policy_value_fn = policy_value_fn
-        
+        self.max_forward_passes = max_forward_passes
+
         # Hyperparameters to evaluate
         self.exploration_constants = exploration_constants
         self.branch_factors = branch_factors
@@ -139,7 +147,8 @@ class MCTSForest_Tuner:
         """Initialize trees for empty configurations."""
         trees = []
         for idx in range(min(self.num_trees, len(self.left_configurations))):
-            config = self.left_configurations.pop(0)
+            # Use the configuration without popping it
+            config = self.left_configurations[idx]
             tree = self._create_tree(config, idx)
             if tree:
                 self.tree_configs[idx] = config
@@ -148,12 +157,14 @@ class MCTSForest_Tuner:
 
     def _create_tree(self, config: tuple, tree_idx: int) -> MCTSTree_Tuner:
         """Create tree with configuration-specific policy function."""
-        question, exploration_constant, _, _ = config
+        question, exploration_constant, branch_factor, _ = config
         question_idx = self.questions.index(question)
+        max_expansions = self.max_forward_passes // branch_factor
         return MCTSTree_Tuner(
             root_value=self.initial_values[question_idx],
             question=question,
             exploration_constant=exploration_constant,
+            max_expansions=max_expansions,
             request_queue=self.request_queue,
             tree_id=tree_idx
         )
@@ -172,24 +183,68 @@ class MCTSForest_Tuner:
     async def _batch_processor(self):
         """Process policy-value network requests in batches."""
         batch, futures = [], []
+        last_activity_time = time.time()
+        
+        # Calculate total configurations
+        total_configs = len(self.questions) * len(self.exploration_constants) * \
+                       len(self.branch_factors) * len(self.temperatures)
+        
         while True:
+            # Exit if all configurations have been processed
+            if self.completed_count >= total_configs:
+                print("Batch processor: All configurations processed, exiting")
+                break
+            
             try:
-                request = await asyncio.wait_for(self.request_queue.get(), timeout=self.batch_interval)
-                question, state, tree_id, future = request
-                batch.append((question, state, *self.tree_configs[tree_id][2:]))
-                futures.append(future)
+                try:
+                    request = await asyncio.wait_for(self.request_queue.get(), timeout=self.batch_interval)
+                    last_activity_time = time.time()
+                    question, state, tree_id, future = request
+                    
+                    # Check if tree_id is still valid (might have been removed)
+                    if tree_id not in self.tree_configs:
+                        print(f"Warning: Request for unknown tree_id {tree_id}")
+                        future.set_result([])  # Resolve with empty result
+                        continue
+                        
+                    batch.append((question, state, *self.tree_configs[tree_id][2:]))
+                    futures.append(future)
+                    
+                    if len(batch) >= self.batch_size or (batch and self.request_queue.empty()):
+                        self.total_api_calls += len(batch)
+                        asyncio.create_task(self._process_network_requests(batch.copy(), futures.copy()))
+                        batch, futures = [], []
+                except asyncio.TimeoutError:
+                    # Process any remaining items in batch
+                    if batch:
+                        self.total_api_calls += len(batch)
+                        asyncio.create_task(self._process_network_requests(batch.copy(), futures.copy()))
+                        batch, futures = [], []
+                    
+                    # Check for long inactivity
+                    if time.time() - last_activity_time > 60 and self.completed_count >= 2600:
+                        print(f"WARNING: Batch processor inactive for >60s, completed: {self.completed_count}")
+                    
+                # Small sleep to prevent CPU spinning
+                await asyncio.sleep(0.001)
                 
-                if len(batch) >= self.batch_size or (batch and self.request_queue.empty()):
-                    self.total_api_calls += len(batch)
-                    asyncio.create_task(self._process_network_requests(batch.copy(), futures.copy()))
-                    batch, futures = [], []
-            except asyncio.TimeoutError:
-                pass
-            await asyncio.sleep(0.001)
+            except Exception as e:
+                print(f"Batch processor error: {type(e).__name__}: {str(e)}")
+                # Resolve any pending futures to prevent hanging
+                for future in futures:
+                    if not future.done():
+                        future.set_result([])
+                batch, futures = [], []
+                await asyncio.sleep(1)  # Wait a bit before continuing
 
     async def _run_tree_spot(self, spot_index: int):
         """Run evaluations for a single tree spot."""
+        # Calculate total configurations correctly
+        total_configs = len(self.questions) * len(self.exploration_constants) * \
+                       len(self.branch_factors) * len(self.temperatures)
+        
         while True:
+            config = None
             try:
                 async with self.config_lock:
                     if not self.left_configurations:
@@ -198,17 +253,58 @@ class MCTSForest_Tuner:
                 
                 self.tree_configs[spot_index] = config
                 self.results[config] = await self._create_tree(config, spot_index).search()
-                self.completed_count += 1  
+                self.completed_count += 1
+                
+                # Check if all configurations have been processed
+                if self.completed_count >= total_configs:
+                    print(f"Spot {spot_index}: All configurations completed, exiting")
+                    break
+                    
             except Exception as e:
-                print(f"Spot {spot_index} error: {type(e).__name__}: {str(e)}")
+                if config:
+                    print(f"Spot {spot_index} error with config {config}: {type(e).__name__}: {str(e)}")
+                    # Mark this configuration as completed even though it failed
+                else:
+                    print(f"Spot {spot_index} error: {type(e).__name__}: {str(e)}")
                 await asyncio.sleep(1)
 
     async def run_forest(self):
         """Run parallel evaluation of all configurations."""
         batch_processor = asyncio.create_task(self._batch_processor())
         tree_spots = [self._run_tree_spot(i) for i in range(len(self.trees))]
-        await asyncio.gather(batch_processor, *tree_spots)
+        
+        # Calculate total configurations for debugging
+        total_configs = len(self.questions) * len(self.exploration_constants) * \
+                       len(self.branch_factors) * len(self.temperatures)
+        
+        # Add periodic status check
+        status_task = asyncio.create_task(self._periodic_status_check(tree_spots))
+        
+        try:
+            await asyncio.gather(batch_processor, *tree_spots)
+        except Exception as e:
+            print(f"Error in run_forest: {type(e).__name__}: {str(e)}")
+        finally:
+            status_task.cancel()
+        
         return self.results
+
+    async def _periodic_status_check(self, tree_spots):
+        """Periodically check and print status of tree spots."""
+        while True:
+            await asyncio.sleep(30)  # Check every 30 seconds
+            done_count = sum(1 for spot in tree_spots if spot.done())
+            print(f"Status check: {done_count}/{len(tree_spots)} tree spots done, {self.completed_count} configs completed")
+            
+
+
+    def _handle_batch_error(self, futures: list, error: Exception):
+        """Handle errors in batch processing by resolving futures with empty results."""
+        print(f"Handling batch error: {error}")
+        for future in futures:
+            if not future.done():
+                # Resolve the future with an empty result to prevent hanging
+                future.set_result([])
 
 
 
@@ -261,6 +357,7 @@ class Run_MCTS_Tuner:
             exploration_constants=forest_config['exploration_constants'],
             branch_factors=forest_config['branch_factors'],
             temperatures=forest_config['temperatures'],
+            max_forward_passes=forest_config['max_forward_passes'],
             policy_value_fn=self.model.get_policy_value,
             batch_size=forest_config['batch_size'],
             batch_interval=forest_config['batch_interval']
