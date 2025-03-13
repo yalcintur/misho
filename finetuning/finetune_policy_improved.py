@@ -54,7 +54,7 @@ def finetune_policy(train_config):
         args=sft_config,
         train_dataset=dataset['train'],
         tokenizer=tokenizer,
-        eval_dataset=dataset['test'],
+        eval_dataset=dataset['validation'],
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],  # Stop if no improvement in 3 evals
     )
 
