@@ -2,25 +2,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from huggingface_hub import login
 import os
 
-# Set your Hugging Face token
-# You can also set it as an environment variable: os.environ["HF_TOKEN"] = "your_token"
-HF_TOKEN = "..."  # Replace with your actual token
+HF_TOKEN = "..." 
 
-# Path to your fine-tuned model
-MODEL_PATH = "./sft-135-checkpoint-3000/"  # Replace with your model path
+MODEL_PATH = "/models/checkpoint-200/"  
 
-# Repository name on Hugging Face (format: username/model-name)
-REPO_NAME = "lakomey/sft-135-checkpoint-3000"  # Replace with your desired repo name
+REPO_NAME = "lakomey/sft-135-iter1-200" 
 
-# Login to Hugging Face
 login(token=HF_TOKEN)
 
-# Load model and tokenizer
 print(f"Loading model and tokenizer from {MODEL_PATH}")
 model = AutoModelForCausalLM.from_pretrained(MODEL_PATH)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
-# Create model card content
 model_card = """
 ---
 language: en
@@ -69,18 +62,11 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 """
 
-# Save model card
 with open("README.md", "w") as f:
     f.write(model_card)
 
-# Push model, tokenizer, and model card to Hub
 print(f"Uploading model and tokenizer to {REPO_NAME}")
 model.push_to_hub(REPO_NAME, commit_message="Upload fine-tuned model")
 tokenizer.push_to_hub(REPO_NAME, commit_message="Upload tokenizer")
-
-# The model card will be uploaded automatically if in the same directory,
-# but we could also upload it explicitly:
-# from huggingface_hub import upload_file
-# upload_file("README.md", path_in_repo="README.md", repo_id=REPO_NAME)
 
 print(f"Model successfully uploaded to: https://huggingface.co/{REPO_NAME}")

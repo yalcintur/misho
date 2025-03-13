@@ -10,7 +10,7 @@ train_arguments:
   logging_steps: 5
   save_steps: 200
   evaluation_strategy: "steps"
-  eval_steps: 200
+  eval_steps: 1
   use_mps_device: false
   hub_model_id: "smol-lm-135M-instruct"
   dataset_file: "/home/misho/data/iter1_135_ds/policy_ds"
