@@ -6,15 +6,14 @@ Configuration for MCTS training.
 DEFAULT_CONFIG = {
     # Forest configuration
     'forest': {
-        'num_trees': 60,
+        'num_trees': 100,
         'max_expansions': 32,
         'c_explore': 0.3,
         'temperature': 0.7,
         'branch_factor': 4,
-        'batch_size': 30,
+        'batch_size': 50,
         'batch_interval': 1.0,
-        'max_workers_policy': 30,
-        'max_workers_value': 30,
+        'max_workers_policy': 50,
     },
     
     # Training configuration

@@ -34,19 +34,22 @@ class PolicyValueModel:
             if not response:
                 return []
             
-            # Add newline for non-terminal states
-            if len(state.split("\n")) < 4:
-                suffix = "\n"
-            elif len(state.split("\n")) >= 4 and not state.rstrip().endswith("."):
-                suffix = "."
-            else:
-                suffix = ""
+            # Process each action to avoid double periods
+            results = []
+            for action in response.choices:
+                if hasattr(action, 'message'):
+                    content = action.message.content.strip()
+                    
+                    if len(state.split("\n")) < 4:
+                        suffix = "\n"
+                    elif len(state.split("\n")) >= 4 and not state.rstrip().endswith(".") and not content.endswith("."):
+                        suffix = "."
+                    else:
+                        suffix = ""
+                        
+                    results.append(state + content + suffix)
             
-            return list(set(
-                (state + action.message.content.strip() + suffix)
-                for action in response.choices 
-                if hasattr(action, 'message')
-            ))
+            return list(set(results))
             
         except Exception as e:
             print(f"Policy sampling error: {str(e)}")

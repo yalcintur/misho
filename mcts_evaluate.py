@@ -51,7 +51,6 @@ class MCTSTree_Evaluate:
         current = self.root
         while current.has_children:
             current = current.favourite_child
-       
         success = int(current.evaluate_terminal_state(self.question)) if current.is_terminal else 0
         return int(success)
 
@@ -83,12 +82,7 @@ class MCTSTree_Evaluate:
                     break
             await asyncio.sleep(0)
 
-        if not self.non_terminal_leaves:
-            best_terminal = max(self.terminal_leaves, key=lambda node: node.value_estimate)
-            success = best_terminal.evaluate_terminal_state(self.question)
-            return int(success)
-        else:
-            return self.get_favourite_trajectory()
+        return self.get_favourite_trajectory()
         
 class MCTSForest_Evaluate:
     """Forest of MCTS trees for parallel exploration of multiple questions."""
