@@ -57,21 +57,18 @@ class MCTSNode:
 class MCTSTree:
     """Single MCTS tree for exploring solutions to a question."""
     
-    def __init__(self, root_value: float, question: str, max_expansions: int, max_leaves: int, 
-                 exploration_constant: float, process_policy_trajectory: Callable,
-                 process_value_trajectory: Callable, request_queue):
+    def __init__(self, root_value: float, question: str, max_expansions: int, 
+                 exploration_constant: float, request_queue):
         self.root = MCTSNode(state="", parent=None, visit_count=0, 
                             action_value=0, value_estimate=root_value)
         self.question = question
         self.max_expansions = max_expansions
-        self.max_leaves = max_leaves
         self.exploration_constant = exploration_constant
-        self.process_policy_trajectory = process_policy_trajectory
-        self.process_value_trajectory = process_value_trajectory
         self.policy_training_data = []
         self.value_training_data = []
         self.request_queue = request_queue
         self.expansion_count = 0
+        self.non_terminal_leaves = [self.root]  
 
     async def get_action_values(self, node: MCTSNode) -> list[tuple[str, float]]:
         """Get action-value pairs from policy-value network."""
@@ -100,8 +97,7 @@ class MCTSTree:
     async def search(self):
         """Perform MCTS search and collect training data."""
         current = self.root
-        while (self.expansion_count < self.max_expansions and 
-               self.root.visit_count < self.max_leaves):
+        while (self.expansion_count < self.max_expansions and self.non_terminal_leaves):
             if current.has_children:
                 current = self.select_child(current)
             elif current.is_terminal:
@@ -117,7 +113,11 @@ class MCTSTree:
             else:
                 try:
                     new_states = await self.get_action_values(current)
+                    self.non_terminal_leaves.remove(current)
                     current.add_children(new_states)
+                    for child in current.children:
+                        if not child.is_terminal:
+                            self.non_terminal_leaves.append(child)
                     self.expansion_count += 1
                 except Exception as e:
                     print(f"Expansion error: {e}")
@@ -129,7 +129,7 @@ class MCTSForest:
     """Forest of MCTS trees for parallel exploration of multiple questions."""
     
     def __init__(self, initial_values: list[float], questions: list[str],
-                 max_expansions: int, max_leaves: int, num_trees: int, 
+                 max_expansions: int, num_trees: int, 
                  exploration_constant: float, policy_value_fn: Callable,
                  process_policy_trajectory: Callable,
                  process_value_trajectory: Callable,
@@ -138,7 +138,6 @@ class MCTSForest:
         self.initial_values = initial_values
         self.questions = questions
         self.max_expansions = max_expansions
-        self.max_leaves = max_leaves
         self.num_trees = num_trees
         self.exploration_constant = exploration_constant
         
@@ -185,17 +184,13 @@ class MCTSForest:
             root_value=self.initial_values[question_idx],
             question=question,
             max_expansions=self.max_expansions,
-            max_leaves=self.max_leaves,
             exploration_constant=self.exploration_constant,
-            process_policy_trajectory=self.process_policy_trajectory,
-            process_value_trajectory=self.process_value_trajectory,
             request_queue=self.request_queue
         )
 
     async def _batch_processor(self):
         """Process policy-value network requests in batches."""
         batch, futures = [], []
-        last_batch_time = time.time()
         print("Starting batch processor")
         
         while True:
@@ -267,13 +262,13 @@ class MCTSForest:
 
     async def _process_trajectories(self, question: str, policy_data: list, value_data: list):
         """Process and store trajectories as training data."""
-        # Remove duplicates from value data
+
         unique_value_data = list(set(value_data))
+        if policy_data:
+            policy_data = random.choices(policy_data, k=len(unique_value_data))
         
-        # Process trajectories
         processed_policy = self.process_policy_trajectory(question, policy_data)
         processed_value = self.process_value_trajectory(question, unique_value_data)
-        
         # Store processed data
         self.policy_training_data.extend(processed_policy)
         self.value_training_data.extend(processed_value)

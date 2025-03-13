@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import time
 from datetime import datetime
 from typing import Dict, List
@@ -8,7 +7,7 @@ from typing import Dict, List
 from mcts_search import MCTSForest
 from policy_value_fn import PolicyValueModel
 from trajectory_processor import TrajectoryProcessor
-from config import get_config
+from config_train import get_config
 
 
 class MCTSDataCollector:
@@ -59,7 +58,6 @@ class MCTSDataCollector:
             initial_values=initial_values,
             questions=self.questions,
             max_expansions=forest_config['max_expansions'],
-            max_leaves=forest_config['max_leaves'],
             num_trees=forest_config['num_trees'],
             exploration_constant=forest_config['c_explore'],
             policy_value_fn=policy_value_model.get_policy_value,

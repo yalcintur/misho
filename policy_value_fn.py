@@ -56,14 +56,11 @@ class PolicyValueModel:
     def estimate_value(self, question: str, state: str) -> float:
         """Estimate state value using value network."""
         
-        try:
-        # If your value endpoint expects a "messages" key rather than "question/state",
-        # build the payload accordingly:
-            if state != "":
-                question += "\n"
-                
-            prompt = question + "\n" + state
+        if self.value_network_url is None:
+            return 0.5
 
+        try:
+            prompt = question + "\n" + state
             payload = {
                 "messages": [
                     {"role": "user", "content": prompt},
@@ -78,7 +75,6 @@ class PolicyValueModel:
             )
             
             if response.status_code == 200:
-                # Convert the "value" key from the response to float
                 return float(response.json().get("value", 0.5))
             else:
                 return 0.5
