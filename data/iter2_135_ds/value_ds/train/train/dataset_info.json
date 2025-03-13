@@ -1,0 +1,58 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "json",
+  "dataset_size": 5728544,
+  "description": "",
+  "download_checksums": {
+    "/home/yalcintur/workspace/courses/misho/data/iter2_135_ds/value_training_data_iter_2-f.jsonl": {
+      "num_bytes": 9626033,
+      "checksum": null
+    }
+  },
+  "download_size": 9626033,
+  "features": {
+    "prompt": [
+      {
+        "role": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "content": {
+          "dtype": "string",
+          "_type": "Value"
+        }
+      }
+    ],
+    "completion": [
+      {
+        "role": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "content": {
+          "dtype": "string",
+          "_type": "Value"
+        }
+      }
+    ]
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 15354577,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 5728544,
+      "num_examples": 59053,
+      "dataset_name": "json"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
