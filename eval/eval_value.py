@@ -8,18 +8,6 @@ import argparse
 from models import ValueFunction
 
 def convert_jsonl_to_train_data(jsonl_file_path: str) -> List[Tuple[List[Dict[str, str]], float]]:
-    """
-    Converts a JSONL file with prompt-completion pairs into training data.
-    Only uses the user's message as input and extracts the score from completion.
-    
-    Args:
-        jsonl_file_path: Path to the JSONL file containing prompt-completion pairs
-    
-    Returns:
-        A list of tuples, where each tuple contains:
-            - A list containing only the user's message dictionary
-            - A float representing the score/correctness of the completion
-    """
     train_data = []
     
     with open(jsonl_file_path, 'r', encoding='utf-8') as f:
@@ -32,13 +20,10 @@ def convert_jsonl_to_train_data(jsonl_file_path: str) -> List[Tuple[List[Dict[st
                 if isinstance(data, str):
                     data = json.loads(data)
                 
-                # Get only the user's message from prompt
                 user_messages = [msg for msg in data["prompt"] if msg["role"] == "user"]
                 
-                # Get the completion message to extract the score
                 completion_messages = data["completion"]
                 
-                # Extract score from completion
                 if isinstance(completion_messages, list) and len(completion_messages) > 0:
                     try:
                         score = float(completion_messages[0]["content"])
@@ -63,18 +48,6 @@ def convert_jsonl_to_train_data(jsonl_file_path: str) -> List[Tuple[List[Dict[st
     return train_data
 
 def evaluate_model(model, test_data, device, batch_size=32):
-    """
-    Evaluates the model on test data.
-    
-    Args:
-        model: The value function model
-        test_data: List of (messages, score) tuples
-        device: Device to run evaluation on
-        batch_size: Batch size for evaluation
-    
-    Returns:
-        average loss, accuracy
-    """
     model.eval()
     criterion = nn.BCELoss(reduction='mean')
     
@@ -82,7 +55,6 @@ def evaluate_model(model, test_data, device, batch_size=32):
     correct = 0
     batch_count = 0
     
-    # Adjust batch size if needed
     actual_batch_size = min(batch_size, len(test_data))
     
     with torch.no_grad():
@@ -93,21 +65,16 @@ def evaluate_model(model, test_data, device, batch_size=32):
             print("Conversations: ", conversations)
             targets = torch.tensor([item[1] for item in batch], dtype=torch.float32).to(device)
             
-            # Convert to model inputs
             inputs = model.prepare_input(conversations)
             inputs = {k: v.to(device) for k, v in inputs.items()}
             
-            # Forward pass
             outputs = model(**inputs)
-            # No need to apply sigmoid here as it's part of the model
             print(f"Probabilities: {outputs.view(-1)}")
             print(f"Target scores: {targets}")
             
-            # Calculate loss
             loss = criterion(outputs.view(-1), targets)
             total_loss += loss.item()
             
-            # Use outputs directly for predictions
             predictions = (outputs.view(-1) > 0.5).float()
             correct += (predictions == targets).sum().item()
             batch_count += 1
@@ -127,22 +94,19 @@ def main():
                        help='Path to model checkpoint')
     args = parser.parse_args()
     
-    # Load configuration
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Set device
     device = config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
     config = config['train_arguments']
     
-    # Load and verify model
     print(f"Loading checkpoint from {args.checkpoint}")
     try:
         checkpoint = torch.load(args.checkpoint, map_location=device)
-        model = ValueFunction(config['model_name'])  # Initialize with same architecture
-        model.load_state_dict(checkpoint)  # Changed: load directly from checkpoint
+        model = ValueFunction(config['model_name'])  
+        model.load_state_dict(checkpoint)
         if not isinstance(model, ValueFunction):
             raise TypeError(f"Loaded model is of type {type(model)}, expected ValueFunction")
         print("Model loaded successfully")

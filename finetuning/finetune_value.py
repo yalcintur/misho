@@ -14,11 +14,10 @@ from tqdm import tqdm
 import numpy as np
 from sklearn.metrics import mean_squared_error
 from transformers import set_seed, get_cosine_schedule_with_warmup
-from valuefunction import ValueFunction  # Import the model defined in valuefunction.py
+from valuefunction import ValueFunction
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_from_disk
 
-# Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -26,23 +25,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-
 class ValueDataset(Dataset):
-    """
-    Custom dataset for value function training.
-    Each example is a tuple: (state_string, score).
-
-    Example:
-       data[i] = ("10 11 11 12\n11-10=1 (left: 11, 12, 1)\n", 1.0)
-    """
     def __init__(self, data, tokenizer, max_length=256):
-        """
-        Args:
-            data: A list of (state_string, score). 
-                  E.g. [("10 11 11 12\n11-10=1 ...", 1.0), ...]
-            tokenizer: A Hugging Face tokenizer (like GPT2Tokenizer, etc.)
-            max_length: Maximum sequence length for tokenization.
-        """
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -51,23 +35,12 @@ class ValueDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        """
-        Returns a single example: (state_string, score) in raw form.
-        We'll transform them to tensors in collate_fn.
-        """
         state_string, score = self.data[idx]
         return state_string, torch.tensor(score, dtype=torch.float32)
 
     def collate_fn(self, batch):
-        """
-        Collates a list of (state_string, score) into a batch of tensors:
-            - input_ids
-            - attention_mask
-            - labels (float scores)
-        """
         states, scores = zip(*batch)
         
-        # Tokenize the state strings
         encoded = self.tokenizer(
             list(states),
             padding="max_length",
@@ -76,7 +49,6 @@ class ValueDataset(Dataset):
             return_tensors="pt"
         )
 
-        # Convert scores to a tensor
         labels = torch.stack(scores)
 
         return {
@@ -92,42 +64,22 @@ def convert_hf_data_to_value_dataset(
     data_path_or_dataset,
     split_name=None
 ):
-    """
-    Reads a Hugging Face dataset (from disk or JSON) and converts it into a list
-    of (user_text, float_label) tuples.
-
-    Args:
-        data_path_or_dataset: Either a path to a dataset folder (for load_from_disk)
-                              or a path to a JSON/JSONL file.
-        split_name: If the dataset has a named split ("train", "validation", etc.), specify it.
-
-    Returns:
-        List of tuples (user_text, score)
-    """
-
-    # Determine if we're loading from disk or JSON file
     if isinstance(data_path_or_dataset, str):  
         if data_path_or_dataset.endswith(".json") or data_path_or_dataset.endswith(".jsonl"):
-            # JSON dataset (uses load_dataset)
             dataset = load_dataset("json", data_files=data_path_or_dataset)
         else:
-            # Saved Hugging Face dataset (uses load_from_disk)
             dataset = load_from_disk(data_path_or_dataset)
     else:
-        # The dataset is already loaded, use it directly
         dataset = data_path_or_dataset
 
-    # If a specific split is requested (e.g., "train", "validation"), select it
     if split_name:
         dataset = dataset[split_name]
 
     data_list = []
     invalid_count = 0
 
-    # Iterate through the dataset
     for example in tqdm(dataset, desc="Converting HF data to ValueDataset"):
         try:
-            # Extract the user prompt
             user_prompt = example.get("prompt", [])
             if not user_prompt or not isinstance(user_prompt, list):
                 invalid_count += 1
@@ -157,13 +109,8 @@ def convert_hf_data_to_value_dataset(
 
     return data_list
 
-
-
-
+# Evaluates the model on a given dataloader and returns the RMSE.
 def evaluate_model(model, dataloader, device):
-    """
-    Evaluates the model on a given dataloader and returns the RMSE.
-    """
     model.eval()
     total_loss = 0.0
     total_samples = 0
@@ -183,10 +130,6 @@ def evaluate_model(model, dataloader, device):
 
 
 def finetune_value(train_config):
-    """
-    Fine-tunes the value function model using the provided configuration.
-    """
-    # Set seeds for reproducibility
     set_seed(train_config["seed"])
     random.seed(train_config["seed"])
     np.random.seed(train_config["seed"])
@@ -204,12 +147,9 @@ def finetune_value(train_config):
     training_data = convert_hf_data_to_value_dataset(train_config["training_data_file"], "train")
     validation_data = convert_hf_data_to_value_dataset(train_config["validation_data_file"], "train")
     
-    # Initialize the model and tokenizer
     model = ValueFunction(train_config["model_name"]).to(train_config["device"])
     tokenizer = model.tokenizer
     
-
-    # Create dataset objects and data loaders
     train_dataset = ValueDataset(training_data, tokenizer)
     validation_dataset = ValueDataset(validation_data, tokenizer)
     

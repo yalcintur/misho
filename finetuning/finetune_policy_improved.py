@@ -21,11 +21,9 @@ def finetune_policy(train_config):
     eval_steps = int(train_config["eval_steps"])
     device = train_config["device"]
 
-    # Load Model and Tokenizer
     model = AutoModelForCausalLM.from_pretrained(model_name, ignore_mismatched_sizes=True).to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    # Load dataset
     train_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "train"))
     val_dataset = load_from_disk(os.path.join(train_config["dataset_file"], "validation"))
     
@@ -36,7 +34,6 @@ def finetune_policy(train_config):
     train_dataset = train_dataset.shuffle(seed=42)
     val_dataset = val_dataset.shuffle(seed=42)
 
-    # Training Configuration
     sft_config = SFTConfig(
         output_dir=output_dir,
         max_steps=max_steps,
@@ -56,7 +53,6 @@ def finetune_policy(train_config):
         hub_model_id=save_model_name,
     )
 
-    # Initialize Trainer with Early Stopping
     trainer = SFTTrainer(
         model=model,
         args=sft_config,
@@ -69,7 +65,6 @@ def finetune_policy(train_config):
     trainer.train()
     trainer.save_model(f"./{save_model_name}")
 
-### **Command-line Interface (CLI) to Call the Script**
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune a causal language model")
     
@@ -91,6 +86,5 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    # Convert arguments into a dictionary and pass to `finetune_policy`
     train_config = vars(args)
     finetune_policy(train_config)

@@ -22,7 +22,6 @@ class ValueFunction(nn.Module):
         self.base_model = AutoModelForCausalLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         
-        # Get hidden size from the model configuration
         hidden_size = self.base_model.config.hidden_size
         
         # Define value head
@@ -38,7 +37,6 @@ class ValueFunction(nn.Module):
         nn.init.kaiming_normal_(self.value_head[-1].weight, mode='fan_in', nonlinearity='linear')
         nn.init.zeros_(self.value_head[-1].bias)
         
-        # Configure tokenizer for right padding (needed for correct last-token extraction)
         if self.tokenizer:
             self.tokenizer.padding_side = "right"
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -47,16 +45,6 @@ class ValueFunction(nn.Module):
         return self.base_model.resize_token_embeddings(new_num_tokens, **kwargs)
     
     def forward(self, input_ids, attention_mask=None):
-        """
-        Forward pass of the model.
-
-        Args:
-            input_ids (torch.Tensor): Tokenized input IDs.
-            attention_mask (torch.Tensor, optional): Attention mask.
-            
-        Returns:
-            torch.Tensor: Predicted value (regression output).
-        """
         outputs = self.base_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -74,20 +62,7 @@ class ValueFunction(nn.Module):
         return self.value_head(pooled).squeeze(-1)
             
     def prepare_input(self, state):
-        """
-        Convert conversation format to tokenized input for the model
-        
-        Args:
-            conversations: List of conversations in the format
-                [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
-        
-        Returns:
-            Tokenized input ready for the model with input_ids and attention_mask
-        """
-
         # Tokenize with the properly configured tokenizer
-        
-        
         # Ensure we return a dictionary with input_ids and attention_mask
         tokenized_inputs = self.tokenizer(
             state,
@@ -98,17 +73,7 @@ class ValueFunction(nn.Module):
         )
         return tokenized_inputs
         
-    
     def predict(self, state : str) -> torch.Tensor:
-        """
-        Make value predictions for a list of conversations
-        
-        Args:
-            conversations: List containing dictionaries with role and content keys
-            
-        Returns:
-            Value predictions (0-1 probability)
-        """
         inputs = self.prepare_input(state)
         inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
     
