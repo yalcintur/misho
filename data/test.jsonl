@@ -1,0 +1,1 @@
+"{\"prompt\": [{\"role\": \"user\", \"content\": \"3 3 10 13\\n13-3=10 (left: 3, 10, 10)\\n10+10=20 (left: 3, 20)\\n20+3=23 (left: 23)\\nThe solution is: 13-3+10+3 = 23.\\n\"}], \"completion\": [{\"role\": \"assistant\", \"content\": 0.0}]}"

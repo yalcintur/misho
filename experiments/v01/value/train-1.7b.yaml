@@ -1,0 +1,17 @@
+train_arguments:
+    model_name: "HuggingFaceTB/SmolLM2-1.7B"
+    model_function: "value"
+    dataset_file: "/home/weh4401/st/24/misho/value_training_data_v2.jsonl"      # Path to your JSONL dataset
+    output_dir: "/data/yalcin/value/sft_output_1.7b"           # Directory where the model and tokenizer will be saved
+    max_epochs: 10
+    batch_size: 8
+    base_lr: 1e-5                    # Learning rate for the base model parameters
+    head_lr: 1e-4                    # Learning rate for the value head parameters
+    weight_decay: 0.01
+    max_grad_norm: 1.0
+    gradient_accumulation_steps: 4
+    warmup_steps: 100
+    split_ratios: [0.8, 0.1, 0.1]     # Train, validation, and test split ratios
+    patience: 3                     # Early stopping patience (in epochs)
+    seed: 42
+    device: "cuda"

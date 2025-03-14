@@ -1,0 +1,17 @@
+# Policy function finetuning
+train_arguments:
+  model_function: "policy"
+  device: "cuda"
+  model_name: "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+  save_model_name: "smol-lm-1.7b-instruct-base"
+  output_dir: "/models/sft_output_1.7b-instruct-base"
+  max_steps: 30000
+  per_device_train_batch_size: 8
+  learning_rate: 8e-6
+  logging_steps: 5
+  save_steps: 20
+  evaluation_strategy: "steps"
+  eval_steps: 20
+  use_mps_device: false
+  hub_model_id: "smol-lm-1.7b-instruct-base"
+  dataset_file: "/data/dataset_iter0"

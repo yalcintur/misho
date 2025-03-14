@@ -1,0 +1,19 @@
+[I 06:22:12.857 NotebookApp] Serving notebooks from local directory: /home/mstojkov2025/misho/finetuning
+[I 06:22:12.857 NotebookApp] Jupyter Notebook 6.4.8 is running at:
+[I 06:22:12.857 NotebookApp] http://cs224n-vm:8888/?token=85fe30c819d3a72274ac7ce2c8c35056acc89b4a02e20c14
+[I 06:22:12.857 NotebookApp]  or http://127.0.0.1:8888/?token=85fe30c819d3a72274ac7ce2c8c35056acc89b4a02e20c14
+[I 06:22:12.857 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 06:22:12.863 NotebookApp] 
+    
+    To access the notebook, open this file in a browser:
+        file:///home/mstojkov2025/.local/share/jupyter/runtime/nbserver-1288-open.html
+    Or copy and paste one of these URLs:
+        http://cs224n-vm:8888/?token=85fe30c819d3a72274ac7ce2c8c35056acc89b4a02e20c14
+     or http://127.0.0.1:8888/?token=85fe30c819d3a72274ac7ce2c8c35056acc89b4a02e20c14
+[I 06:23:50.211 NotebookApp] 302 GET /?token=85fe30c819d3a72274ac7ce2c8c35056acc89b4a02e20c14 (128.12.123.136) 0.540000ms
+[W 06:29:09.193 NotebookApp] 404 GET /99cd316e28205cb868af3a9b79773c7edd9755ffbae40f14 (128.12.123.136) 8.850000ms referer=None
+[I 06:31:42.663 NotebookApp] 302 GET /?token=99cd316e28205cb868af3a9b79773c7edd9755ffbae40f14 (128.12.123.136) 0.530000ms
+[I 06:31:54.001 NotebookApp] New terminal with automatic name: 1
+[I 07:17:24.192 NotebookApp] 302 GET /?token=2d804027de561263a12a8b753b5b93e460b0dac0bc902ce (128.12.123.136) 0.480000ms
+[I 07:18:18.026 NotebookApp] New terminal with automatic name: 2
+[I 07:32:40.705 NotebookApp] 302 GET / (147.185.132.73) 0.520000ms
