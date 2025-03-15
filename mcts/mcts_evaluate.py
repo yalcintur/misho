@@ -411,9 +411,9 @@ class Run_MCTS_Evaluate:
                     pass
 
 
-async def main():
+async def main(value_size: int, policy_size: int, branch_factor: int, num_expansions: int, temperature: float, c_explore: float):
     """Main entry point for evaluation."""
-    config = get_config()
+    config = get_config(value_size, policy_size, branch_factor, num_expansions, temperature, c_explore)
     
     # Evaluation
     evaluator = Run_MCTS_Evaluate(config=config)
@@ -425,4 +425,24 @@ async def main():
         await evaluator.stop_evaluation()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(135, 1700, 3, 20, 0.3, 0.3))
+    print("135, 1700 3, 20 done")
+    asyncio.run(main(360, 1700, 3, 20, 0.3, 0.3))
+    print("360, 1700 3, 20 done")
+    
+    asyncio.run(main(135, 135, 1, 64, 0.3, 0.3))
+    print("135, 135 1, 64 done")
+    asyncio.run(main(135, 135, 2, 32, 0.3, 0.3))
+    print("135, 135 2, 32 done")
+    asyncio.run(main(135, 135, 3, 21, 0.3, 0.3))
+    print("135, 135 3, 21 done")
+    asyncio.run(main(135, 135, 4, 16, 0.3, 0.3))
+    print("135, 135 4, 16 done")
+    asyncio.run(main(135, 135, 5, 13, 0.3, 0.3))
+    print("135, 135 5, 13 done")
+    asyncio.run(main(135, 135, 6, 11, 0.3, 0.3))
+    print("135, 135 6, 11 done")
+    asyncio.run(main(135, 135, 7, 9, 0.7, 0.2))
+    print("135, 135 7, 9 done")
+    
+    
