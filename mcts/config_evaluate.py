@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     
     # File paths configuration
     'paths': {
-        'questions_path': 'data_test.txt'
+        'questions_path': '../data/raw_data/test.txt'
     },
     
     # Intervals configuration
