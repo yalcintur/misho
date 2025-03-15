@@ -23,8 +23,8 @@ DEFAULT_CONFIG = {
     
     # File paths configuration
     'paths': {
-        'train_questions_path': 'data_train.txt',
-        'val_questions_path': 'data_val.txt',
+        'train_questions_path': '../data/raw_data/data_train.txt',
+        'val_questions_path': '../data/raw_data/data_val.txt',
         'train_policy_data_path': 'policy_training_data.jsonl',
         'val_policy_data_path': 'policy_validation_data.jsonl',
         'train_value_data_path': 'value_training_data.jsonl',
