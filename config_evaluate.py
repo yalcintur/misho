@@ -40,7 +40,7 @@ DEFAULT_CONFIG = {
     }
 }
 
-def get_config(value_size: int, policy_size: int):
+def get_config(value_size: int, policy_size: int, branch_factor: int, num_expansions: int, temperature: float, c_explore: float):
     """
     Get configuration dictionary.
     
@@ -54,6 +54,7 @@ def get_config(value_size: int, policy_size: int):
         config['api']['value_api_base_url'] = "http://45.135.56.11:32637/predict"
     if value_size == 1700:
         config['api']['value_api_base_url'] = "http://45.135.56.11:26046/predict"
+
     if policy_size == 135:
         config['api']['policy_model'] = "lakomey/sft-135-iter1-10-b32"
         config['api']['openai_api_base'] = "http://81.166.173.12:10569/v1"
@@ -61,6 +62,11 @@ def get_config(value_size: int, policy_size: int):
         config['api']['policy_model'] = "lakomey/sft-360-iter1-50-b8"
         config['api']['openai_api_base'] = "http://79.160.189.79:14182/v1"
     if policy_size == 1700:
-        config['api']['policy_model'] = "akomey/sft-1.7b-base-150-b8"
+        config['api']['policy_model'] = "lakomey/sft-1.7b-base-150-b8"
         config['api']['openai_api_base'] = "http://136.38.166.236:34733/v1"
+
+    config['forest']['branch_factor'] = branch_factor
+    config['forest']['max_expansions'] = num_expansions
+    config['forest']['temperature'] = temperature
+    config['forest']['c_explore'] = c_explore
     return config 
