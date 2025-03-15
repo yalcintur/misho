@@ -41,7 +41,7 @@ DEFAULT_CONFIG = {
     
     # API configuration
     'api': {
-        'openai_api_base': "http://172.81.127.5:31540/v1",
+        'openai_api_base': "http://81.166.173.12:10569/v1",
         'openai_api_key': "sk-placeholder",
         'value_api_base_url': "http://38.29.145.26:40651/predict",  #"http://38.29.145.26:40651/predict"
         'policy_model': "lakomey/sft-135-iter1-10-b32"
