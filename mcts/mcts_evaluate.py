@@ -425,10 +425,8 @@ async def main(value_size: int, policy_size: int, branch_factor: int, num_expans
         await evaluator.stop_evaluation()
 
 if __name__ == "__main__":
-    asyncio.run(main(135, 1700, 3, 20, 0.3, 0.3))
-    print("135, 1700 3, 20 done")
-    asyncio.run(main(360, 1700, 3, 20, 0.3, 0.3))
-    print("360, 1700 3, 20 done")
+    asyncio.run(main(0, 1700, 1, 4, 0.1, 0.3))
+    print("None, 1700 1, 4 done")
     
     asyncio.run(main(135, 135, 1, 64, 0.3, 0.3))
     print("135, 135 1, 64 done")

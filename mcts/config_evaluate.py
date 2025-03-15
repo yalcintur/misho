@@ -48,6 +48,8 @@ def get_config(value_size: int, policy_size: int, branch_factor: int, num_expans
         Complete configuration dictionary
     """
     config = DEFAULT_CONFIG.copy()
+    if value_size == 0:
+        config['api']['value_api_base_url'] = None
     if value_size == 135:
         config['api']['value_api_base_url'] = "http://45.135.56.11:26633/predict"
     if value_size == 360:
